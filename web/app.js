@@ -469,6 +469,8 @@ function toggleMuteVolume() {
 /* =========================================================================
    Playlists Management
    ========================================================================= */
+let playlistFilterQuery = '';
+
 async function loadActivePlaylist(name) {
   if (!name) return;
   selectedPlaylistName = name;
@@ -483,16 +485,21 @@ async function loadActivePlaylist(name) {
   }
 }
 
-function renderPlaylistTabs(pls) {
+function filterPlaylistList(query) {
+  playlistFilterQuery = (query || '').trim().toLowerCase();
+  renderPlaylistNav(currentPlaylists);
+}
+
+function renderPlaylistNav(pls) {
   currentPlaylists = pls || [];
   const totalBadge = document.getElementById('playlists-total-badge');
   if (totalBadge) totalBadge.innerText = currentPlaylists.length;
 
-  const container = document.getElementById('playlist-tabs-container');
+  const container = document.getElementById('playlist-nav-list');
   if (!container) return;
 
   if (currentPlaylists.length === 0) {
-    container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 4px 0;">No playlists created yet. Click "+ New Playlist" to create your first playlist!</div>';
+    container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.82rem; padding: 12px 6px; text-align: center;">No playlists created yet. Click "+ New Playlist" to start!</div>';
     document.getElementById('active-playlist-toolbar').style.display = 'none';
     document.getElementById('playlist-add-box').style.display = 'none';
     document.getElementById('playlist-tracks-container').innerHTML = '<div class="playback-empty">No active playlist selected.</div>';
@@ -500,17 +507,28 @@ function renderPlaylistTabs(pls) {
     return;
   }
 
+  const filtered = playlistFilterQuery
+    ? currentPlaylists.filter(p => p.name.toLowerCase().includes(playlistFilterQuery))
+    : currentPlaylists;
+
+  if (filtered.length === 0) {
+    container.innerHTML = `<div style="color: var(--text-muted); font-size: 0.82rem; padding: 12px 6px; text-align: center;">No playlist matches "${escapeHtml(playlistFilterQuery)}"</div>`;
+    return;
+  }
+
   if (!selectedPlaylistName || !currentPlaylists.some(p => p.name.toLowerCase() === selectedPlaylistName.toLowerCase())) {
     selectedPlaylistName = currentPlaylists[0].name;
   }
 
-  container.innerHTML = currentPlaylists.map(p => {
+  container.innerHTML = filtered.map(p => {
     const isSel = (p.name.toLowerCase() === selectedPlaylistName.toLowerCase());
     return `
-      <div class="playlist-tab-chip ${isSel ? 'active' : ''}" onclick="selectPlaylist('${escapeHtml(p.name)}')">
-        <span class="material-symbols-rounded" style="font-size: 16px;">queue_music</span>
-        <span>${escapeHtml(p.name)}</span>
-        <span class="badge">${p.track_count || 0}</span>
+      <div class="playlist-nav-item ${isSel ? 'active' : ''}" onclick="selectPlaylist('${escapeHtml(p.name)}')">
+        <div class="playlist-nav-left">
+          <span class="material-symbols-rounded playlist-nav-icon">queue_music</span>
+          <span class="playlist-nav-name" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</span>
+        </div>
+        <span class="playlist-nav-badge">${p.track_count || 0}</span>
       </div>
     `;
   }).join('');
@@ -518,9 +536,13 @@ function renderPlaylistTabs(pls) {
   loadActivePlaylist(selectedPlaylistName);
 }
 
+function renderPlaylistTabs(pls) {
+  renderPlaylistNav(pls);
+}
+
 function selectPlaylist(name) {
   selectedPlaylistName = name;
-  renderPlaylistTabs(currentPlaylists);
+  renderPlaylistNav(currentPlaylists);
 }
 
 function renderActivePlaylist(pl) {
