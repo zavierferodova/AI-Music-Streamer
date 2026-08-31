@@ -71,12 +71,18 @@ Trigger phrases: "play music", "stream music", "search music", "queue", "shuffle
 # Start background broadcast daemon (default: silent mode, HTTP stream only)
 ~/music-streamer/stream.py --daemon --port 8000
 
+# Or start with instant worldwide public HTTPS tunnel
+~/music-streamer/stream.py --daemon --public --port 8000
+
 # Or explicitly start in speaker sync mode (unmutes local machine speaker as well)
 ~/music-streamer/stream.py --daemon --mode speaker --port 8000
 ```
 
-### 2. Switch Audio Mode On-The-Fly (No Server Restart Needed)
+### 2. Switch Audio Mode & Public Streaming On-The-Fly
 ```bash
+# Start/show public worldwide HTTPS tunnel URLs for active server
+~/music-streamer/stream.py public
+
 # Switch to silent mode (default: mutes local speaker, continuous HTTP stream stays alive)
 ~/music-streamer/stream.py silent
 

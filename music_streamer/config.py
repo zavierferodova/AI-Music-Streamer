@@ -19,6 +19,8 @@ PID_FILE = RUNTIME_DIR / "stream_server.pid"
 PLAYER_PID_FILE = RUNTIME_DIR / "player.pid"
 PLAYER_LOG_FILE = RUNTIME_DIR / "player.log"
 SERVER_LOG_FILE = RUNTIME_DIR / "stream_server.log"
+TUNNEL_PID_FILE = RUNTIME_DIR / "tunnel.pid"
+TUNNEL_LOG_FILE = RUNTIME_DIR / "tunnel.log"
 
 # Audio Constants (CD Quality 44.1 kHz, 16-bit stereo)
 SAMPLE_RATE = 44100

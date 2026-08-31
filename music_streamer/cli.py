@@ -21,6 +21,8 @@ from music_streamer.config import (
     ROOT_DIR,
     SERVER_LOG_FILE,
     SOCKET_PATH,
+    TUNNEL_LOG_FILE,
+    TUNNEL_PID_FILE,
 )
 from music_streamer.db import db
 from music_streamer.ipc import send_ipc_command
@@ -31,8 +33,110 @@ from music_streamer.security import security
 
 
 # -----------------------------------------------------------------------------
-# System Helpers
+# System & Tunnel Helpers
 # -----------------------------------------------------------------------------
+
+
+def is_tunnel_running() -> Optional[int]:
+    """Returns PID of active cloudflared tunnel if running, or None."""
+    pid = None
+    if TUNNEL_PID_FILE.exists():
+        try:
+            pid = int(TUNNEL_PID_FILE.read_text().strip())
+        except Exception:
+            pass
+    if not pid:
+        pid_str = db.get_setting("tunnel_pid", "")
+        if pid_str and pid_str.isdigit():
+            pid = int(pid_str)
+
+    if pid:
+        try:
+            os.kill(pid, 0)
+            return pid
+        except OSError:
+            TUNNEL_PID_FILE.unlink(missing_ok=True)
+            db.set_setting("tunnel_pid", "0")
+            db.set_setting("public_url", "")
+            return None
+    return None
+
+
+def stop_tunnel() -> bool:
+    """Stops any active cloudflared tunnel process."""
+    pid = is_tunnel_running()
+    if pid:
+        try:
+            os.kill(pid, signal.SIGTERM)
+            time.sleep(0.3)
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
+    TUNNEL_PID_FILE.unlink(missing_ok=True)
+    db.set_setting("tunnel_pid", "0")
+    db.set_setting("public_url", "")
+    subprocess.run(["pkill", "-f", "cloudflared.*localhost:8000"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return True
+
+
+def start_tunnel(port: int = DEFAULT_PORT) -> tuple[bool, str]:
+    """Starts detached cloudflared public tunnel in background and returns (success, public_url)."""
+    running_pid = is_tunnel_running()
+    current_pub_url = db.get_setting("public_url", "")
+    if running_pid and current_pub_url:
+        return True, current_pub_url
+
+    # Check for cloudflared binary
+    cf_bin = None
+    for p in ["/usr/local/bin/cloudflared", "/usr/bin/cloudflared"]:
+        if os.path.exists(p):
+            cf_bin = p
+            break
+    if not cf_bin:
+        try:
+            cf_bin = subprocess.check_output(["which", "cloudflared"], text=True).strip()
+        except Exception:
+            pass
+
+    if not cf_bin:
+        return False, "cloudflared binary not found on system."
+
+    # Kill old hanging tunnels on this port
+    stop_tunnel()
+    time.sleep(0.3)
+
+    # Open fresh tunnel log
+    log_file = open(TUNNEL_LOG_FILE, "w")
+    proc = subprocess.Popen(
+        [cf_bin, "tunnel", "--url", f"http://127.0.0.1:{port}"],
+        stdout=log_file,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,  # Fully detached from terminal / CLI process
+    )
+
+    TUNNEL_PID_FILE.write_text(str(proc.pid))
+    db.set_setting("tunnel_pid", str(proc.pid))
+
+    # Poll log for public url
+    pub_url = ""
+    for _ in range(35):
+        time.sleep(0.3)
+        if proc.poll() is not None:
+            return False, f"cloudflared exited unexpectedly with code {proc.returncode}."
+        if TUNNEL_LOG_FILE.exists():
+            try:
+                content = TUNNEL_LOG_FILE.read_text(errors="ignore")
+                m = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", content)
+                if m:
+                    pub_url = m.group(0)
+                    db.set_setting("public_url", pub_url)
+                    break
+            except Exception:
+                pass
+
+    if pub_url:
+        return True, pub_url
+    return False, "Timed out waiting for cloudflared tunnel URL to be assigned."
 
 
 def get_lan_ip() -> str:
@@ -215,7 +319,7 @@ def build_stop_parser() -> argparse.ArgumentParser:
 
 def build_stream_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Manage continuous HTTP stream server & broadcast station")
-    parser.add_argument("command", nargs="?", choices=["status", "stop", "silent", "speaker", "mode"], help="Action")
+    parser.add_argument("command", nargs="?", choices=["status", "stop", "silent", "speaker", "mode", "public"], help="Action")
     parser.add_argument("--mode", choices=["silent", "speaker"], default="silent", help="Playback mode")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="Port to listen on")
     parser.add_argument("--url", help="Initial YouTube URL to play immediately")
@@ -948,6 +1052,11 @@ def handle_status(args: argparse.Namespace) -> int:
     print(f"📡 Stream Server: {srv_status}")
     if server_pid:
         print(f"   Stream URL   : {stream_url}")
+        pub_url = db.get_setting("public_url", "")
+        if pub_url and is_tunnel_running():
+            otp_param = f"?otp={otp_code}" if otp_enabled else ""
+            print(f"🌐 Public Stream: {pub_url}/stream.mp3{otp_param}")
+            print(f"   Public Player: {pub_url}/{otp_param}")
 
     return 0
 
@@ -959,6 +1068,7 @@ def handle_stop(args: argparse.Namespace) -> int:
     if server_pid:
         if all_stop:
             print("Stopping stream server daemon...")
+            stop_tunnel()
             try:
                 os.kill(server_pid, signal.SIGTERM)
                 time.sleep(0.5)
@@ -974,6 +1084,7 @@ def handle_stop(args: argparse.Namespace) -> int:
                     pass
             db.set_setting("server_pid", "0")
             db.set_setting("state", "stopped")
+            db.set_setting("public_url", "")
             print("Stream server stopped.")
             return 0
         else:
@@ -987,9 +1098,11 @@ def handle_stop(args: argparse.Namespace) -> int:
             print("Tip: Run './stop.py --all' or './stream.py stop' to completely kill the stream server daemon.")
             return 0
 
+    stop_tunnel()
     db.set_setting("state", "stopped")
     db.set_setting("current_url", "")
     db.set_setting("current_title", "")
+    db.set_setting("public_url", "")
     print("Nothing was running.")
     return 0
 
@@ -1023,12 +1136,42 @@ def handle_stream(args: argparse.Namespace) -> int:
             print("Switched to SPEAKER mode (server speaker unmuted and synced with broadcast).")
         return 0
 
+    elif cmd == "public":
+        server_pid = is_server_running()
+        if not server_pid:
+            print("Stream server is not running. Starting background stream server daemon...")
+            args.daemon = True
+            args.public = True
+            # Proceed to start server and tunnel below
+        else:
+            print("Connecting persistent public Cloudflare Tunnel for live stream server...", flush=True)
+            ok, res_url = start_tunnel(args.port)
+            if ok:
+                otp_str = f"?otp={security.get_current_otp()}" if security.is_enabled() else ""
+                lan_ip = get_lan_ip()
+                print("═" * 60)
+                print(" 🌐 PUBLIC STREAM BROADCAST ACTIVE (Persistent Tunnel)")
+                print("═" * 60)
+                print(f"  Public Web Player : {res_url}/{otp_str}")
+                print(f"  Public MP3 Stream : {res_url}/stream.mp3{otp_str}")
+                print("─" * 60)
+                print(f"  Local Web Player  : http://{lan_ip}:{args.port}/{otp_str}")
+                print(f"  Local MP3 Stream  : http://{lan_ip}:{args.port}/stream.mp3{otp_str}")
+                print("═" * 60)
+                return 0
+            else:
+                print(f"Error starting public tunnel: {res_url}", file=sys.stderr)
+                return 1
+
     # Start server
     server_pid = is_server_running()
     if server_pid:
         lan_ip = get_lan_ip()
         print(f"Stream server is already running (PID {server_pid}).")
         print(f"Stream URL: http://{lan_ip}:{args.port}/stream.mp3")
+        pub_url = db.get_setting("public_url", "")
+        if pub_url and is_tunnel_running():
+            print(f"Public URL: {pub_url}/stream.mp3")
         print("Use './stream.py stop' to stop it, or './stream.py status' for details.")
         return 0
 
@@ -1048,8 +1191,6 @@ def handle_stream(args: argparse.Namespace) -> int:
             cmd_args.extend(["--url", args.url])
         if args.queue:
             cmd_args.append("--queue")
-        if args.public:
-            cmd_args.append("--public")
 
         log_file = open(SERVER_LOG_FILE, "a")
         proc = subprocess.Popen(
@@ -1066,6 +1207,15 @@ def handle_stream(args: argparse.Namespace) -> int:
             print(f"✓ Stream server started successfully (PID {proc.pid})")
             print(f"  Local Stream : http://{lan_ip}:{args.port}/stream.mp3")
             print(f"  Web Player   : http://{lan_ip}:{args.port}/")
+            if args.public:
+                print("Starting persistent public Cloudflare Tunnel...", flush=True)
+                ok, res_url = start_tunnel(args.port)
+                if ok:
+                    otp_str = f"?otp={security.get_current_otp()}" if security.is_enabled() else ""
+                    print(f"  Public Stream: {res_url}/stream.mp3{otp_str}")
+                    print(f"  Public Player: {res_url}/{otp_str}")
+                else:
+                    print(f"  Warning: Failed to start public tunnel: {res_url}")
             print(f"  Logs         : {SERVER_LOG_FILE}")
             return 0
         else:
@@ -1120,6 +1270,7 @@ def handle_stream(args: argparse.Namespace) -> int:
                                 m = re.search(r"https://[^\s]+\.trycloudflare\.com", line)
                                 if m:
                                     pub_url = m.group(0)
+                                    db.set_setting("public_url", pub_url)
                                     print(f"\n🌐 PUBLIC URL: {pub_url}/stream.mp3", flush=True)
                                     print(f"   Web Player: {pub_url}/\n", flush=True)
                                     break
