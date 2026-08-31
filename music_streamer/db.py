@@ -589,6 +589,60 @@ class DatabaseManager:
             cur.close()
             return deleted
 
+    def search_local_tracks(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """
+        Searches all tracks across playlists and active playback queue in SQLite.
+        Returns matching tracks with their source information (playlist name or queue status).
+        """
+        clean_q = (query or "").strip()
+        if not clean_q:
+            return []
+
+        pattern = f"%{clean_q}%"
+        results: List[Dict[str, Any]] = []
+        seen_keys = set()
+
+        with self.get_connection() as conn:
+            cur = conn.cursor()
+
+            # 1. Search in Playlist Tracks
+            cur.execute(
+                """
+                SELECT pt.id, pt.url, pt.title, pt.thumbnail, pt.playlist_id, p.name AS playlist_name, 'playlist' AS source_type
+                FROM playlist_tracks pt
+                JOIN playlists p ON pt.playlist_id = p.id
+                WHERE pt.title LIKE ? OR pt.url LIKE ? OR p.name LIKE ?
+                ORDER BY pt.added_at DESC
+                LIMIT ?;
+                """,
+                (pattern, pattern, pattern, limit),
+            )
+            for row in cur.fetchall():
+                item = dict(row)
+                item["source_label"] = f"Playlist: {item['playlist_name']}"
+                results.append(item)
+                seen_keys.add((item["url"], item["playlist_id"]))
+
+            # 2. Search in Playback Tracks (Active Queue & History)
+            cur.execute(
+                """
+                SELECT id, url, title, thumbnail, status, 'playback' AS source_type
+                FROM playback_tracks
+                WHERE title LIKE ? OR url LIKE ?
+                ORDER BY added_at DESC
+                LIMIT ?;
+                """,
+                (pattern, pattern, limit),
+            )
+            for row in cur.fetchall():
+                item = dict(row)
+                item["source_label"] = f"Playback Queue ({item['status'].capitalize()})"
+                results.append(item)
+
+            cur.close()
+
+        return results[:limit]
+
 
 # Global singleton instance
 db = DatabaseManager()

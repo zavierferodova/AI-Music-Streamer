@@ -324,6 +324,22 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
                     self.wfile.write(b'{"status": "error", "message": "Playlist not found"}\n')
             return
 
+        elif path == "/api/search":
+            qs = parse_qs(parsed.query)
+            q = qs.get("q", [""])[0] or qs.get("query", [""])[0]
+            count = int(qs.get("count", ["5"])[0])
+            include_web = qs.get("web", ["1"])[0] not in ["0", "false", "no"]
+            from music_streamer.search import search_unified
+            res = search_unified(q, count=count, include_web=include_web, database=self.server.db)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "no-cache, no-store")
+            self.end_headers()
+            if not head_only:
+                self.wfile.write(json.dumps({"status": "ok", **res}).encode("utf-8"))
+            return
+
         elif path == "/" or path == "/index.html":
             qs = parse_qs(parsed.query)
             query_otp = qs.get("otp", [None])[0]
@@ -734,6 +750,14 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             target = payload.get("playlist") or payload.get("name") or payload.get("id")
             res = self.server.playlist_mgr.queue_playlist(target, shuffle=bool(payload.get("shuffle", False)))
             self._send_json(res)
+
+        elif path == "/api/search":
+            query = payload.get("query") or payload.get("q") or ""
+            count = int(payload.get("count", 5))
+            include_web = payload.get("web", True)
+            from music_streamer.search import search_unified
+            res = search_unified(query, count=count, include_web=include_web, database=self.server.db)
+            self._send_json({"status": "ok", **res})
 
         elif path == "/api/mode":
             mode = payload.get("mode")

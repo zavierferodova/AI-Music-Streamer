@@ -327,17 +327,38 @@ def handle_search(args: argparse.Namespace) -> int:
     elif args.url > 0:
         mode = "url"
         select_idx = args.url
-    elif args.id > 0:
-        mode = "id"
-        select_idx = args.id
+    local_matches = db.search_local_tracks(query, limit=5)
+
+    if args.json or os.environ.get("JSON") == "1":
+        results = search_music(query, num=num, provider=args.provider)
+        output_data = {
+            "query": query,
+            "local_count": len(local_matches),
+            "local_matches": local_matches,
+            "web_count": results.count,
+            "web_results": [asdict(r) for r in results.results],
+        }
+        print(json.dumps(output_data, indent=2, ensure_ascii=False))
+        return 0
+
+    if not args.first and args.url == 0 and args.id == 0 and local_matches:
+        print("═" * 60)
+        print(f" 📚 LOCAL LIBRARY MATCHES ({len(local_matches)} found in Playlists & Queue)")
+        print("═" * 60)
+        for idx, lm in enumerate(local_matches, 1):
+            src = lm.get("source_label", "Local")
+            print(f"  [{idx}] {lm['title']} ({src})")
+            print(f"      {lm['url']}")
+        print("═" * 60)
+        print(" 🌐 WEB SEARCH RESULTS (Online)")
+        print("═" * 60)
 
     results = search_music(query, num=num, provider=args.provider)
     if results.count == 0:
-        if mode == "json":
-            print(json.dumps(results.to_dict(), indent=2, ensure_ascii=False))
-        else:
+        if not local_matches:
             print(f"No results for: {query}", file=sys.stderr)
-        return 2
+            return 2
+        return 0
 
     try:
         formatted = format_search_results(results, mode=mode, select_index=select_idx)

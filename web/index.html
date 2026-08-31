@@ -44,6 +44,18 @@
       </div>
     </header>
 
+    <!-- Universal Search Bar (Searches Local Playlists & Library first, then Web) -->
+    <section class="search-bar-section" aria-label="Search Music">
+      <div class="search-bar-inner">
+        <span class="material-symbols-rounded search-bar-icon">search</span>
+        <input type="text" id="universal-search-input" class="search-bar-input" placeholder="Search song in playlists, queue, or online YouTube..." onkeydown="if(event.key==='Enter') executeUniversalSearch()">
+        <button class="btn btn-primary" id="btn-search-exec" onclick="executeUniversalSearch()">
+          <span class="material-symbols-rounded">search</span>
+          <span>Search</span>
+        </button>
+      </div>
+    </section>
+
     <!-- Hero Now Playing Card with Thumbnail -->
     <main class="hero-card">
       <div class="now-playing-header">
@@ -374,6 +386,53 @@
 
       </div>
     </section>
+  </div>
+
+  <!-- Universal Search Results Modal (Local Playlist Matches & Web YouTube) -->
+  <div class="search-modal-overlay" id="search-modal-overlay" style="display: none;" onclick="if(event.target===this) closeSearchModal()">
+    <div class="search-modal-card">
+      <div class="search-modal-header">
+        <div class="search-modal-title">
+          <span class="material-symbols-rounded" style="color: var(--primary);">travel_explore</span>
+          <span>Search Results: <span id="search-query-display" style="color: #ffffff; font-weight: 700;"></span></span>
+        </div>
+        <button class="btn-icon-subtle" onclick="closeSearchModal()" title="Close" style="background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 4px;">
+          <span class="material-symbols-rounded">close</span>
+        </button>
+      </div>
+
+      <div class="search-modal-body">
+        <!-- 1. Local Library Section -->
+        <div class="search-section" id="search-local-section">
+          <div class="search-section-header">
+            <div class="search-section-title-wrap">
+              <span class="material-symbols-rounded" style="color: var(--accent);">folder_music</span>
+              <span class="search-section-heading">Found in Playlists & Library</span>
+              <span class="badge badge-server" id="search-local-count">0 found</span>
+            </div>
+            <span class="search-section-tag">Instant Local Play</span>
+          </div>
+          <ul class="search-results-list" id="search-local-list">
+            <!-- Dynamic local results -->
+          </ul>
+        </div>
+
+        <!-- 2. Online Web Section -->
+        <div class="search-section" id="search-web-section">
+          <div class="search-section-header">
+            <div class="search-section-title-wrap">
+              <span class="material-symbols-rounded" style="color: var(--rose);">public</span>
+              <span class="search-section-heading">Online Web Results (YouTube)</span>
+              <span class="badge badge-listeners" id="search-web-count">0 found</span>
+            </div>
+            <span class="search-section-tag">Online Stream</span>
+          </div>
+          <ul class="search-results-list" id="search-web-list">
+            <!-- Dynamic web results -->
+          </ul>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Security Lock Screen Modal (Glassmorphic OTP Input) -->

@@ -89,6 +89,38 @@ class TestSearch(unittest.TestCase):
         self.assertEqual(meta["title"], "Denny Caknan - Wirang (Official Music Video)")
         self.assertEqual(meta["thumbnail"], "https://i.ytimg.com/vi/78Y0SxVVxP4/maxresdefault.jpg")
 
+    def test_search_unified(self):
+        """Verify search_unified checks local SQLite tracks first and combines with web."""
+        import tempfile
+        from pathlib import Path
+        from music_streamer.db import DatabaseManager
+        from music_streamer.playlist import PlaylistManager
+        from music_streamer.search import search_unified
+
+        with tempfile.TemporaryDirectory() as td:
+            db_inst = DatabaseManager(Path(td) / "test_search.db")
+            pl_mgr = PlaylistManager(db_inst)
+
+            # Create playlist with matching track
+            pl_mgr.create_playlist("Top Hits")
+            pl_mgr.add_track("Top Hits", url="https://youtube.com/watch?v=local1", title="Alan Walker Faded", auto_fetch=False)
+
+            with patch("music_streamer.search.search_music") as mock_web_search:
+                mock_web_search.return_value = SearchResults(
+                    query="Alan Walker",
+                    provider="youtube",
+                    count=1,
+                    results=[SearchResult(id="web1", title="Alan Walker - Spectre", url="https://youtube.com/watch?v=web1")],
+                )
+
+                res = search_unified("Alan Walker", count=5, include_web=True, database=db_inst)
+
+                self.assertEqual(res["local_count"], 1)
+                self.assertEqual(res["local_results"][0]["title"], "Alan Walker Faded")
+                self.assertEqual(res["local_results"][0]["source_label"], "Playlist: Top Hits")
+                self.assertEqual(res["web_count"], 1)
+                self.assertEqual(res["web_results"][0]["title"], "Alan Walker - Spectre")
+
 
 if __name__ == "__main__":
     unittest.main()

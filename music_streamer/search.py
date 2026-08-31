@@ -209,3 +209,32 @@ def fetch_track_metadata(
             "thumbnail": thumb_fallback,
             "url": url,
         }
+
+
+def search_unified(
+    query: str,
+    count: int = 5,
+    include_web: bool = True,
+    database=None,
+) -> dict:
+    """
+    Performs unified search across local library (playlists + playback queue) first,
+    and optionally queries online providers (YouTube/SoundCloud).
+    """
+    from music_streamer.db import db as default_db
+
+    target_db = database or default_db
+    local_matches = target_db.search_local_tracks(query, limit=count * 2)
+
+    web_res_list = []
+    if include_web:
+        web_res = search_music(query, provider="youtube", count=count)
+        web_res_list = [asdict(r) for r in web_res.results]
+
+    return {
+        "query": query,
+        "local_results": local_matches,
+        "web_results": web_res_list,
+        "local_count": len(local_matches),
+        "web_count": len(web_res_list),
+    }

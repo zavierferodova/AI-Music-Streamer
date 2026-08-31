@@ -1530,3 +1530,205 @@ body {
   max-height: 380px;
   overflow-y: auto;
 }
+
+/* =========================================================================
+   Universal Search Bar & Results Modal Styles
+   ========================================================================= */
+.search-bar-section {
+  margin-bottom: 20px;
+}
+
+.search-bar-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: var(--radius-md);
+  padding: 8px 12px 8px 18px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  transition: all 0.2s ease;
+}
+
+.search-bar-inner:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 16px var(--primary-glow);
+}
+
+.search-bar-icon {
+  color: var(--primary);
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.search-bar-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.search-bar-input::placeholder {
+  color: var(--text-dim);
+}
+
+/* Search Modal */
+.search-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 15, 29, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.search-modal-card {
+  width: 100%;
+  max-width: 820px;
+  max-height: 85vh;
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 30px rgba(56, 189, 248, 0.1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalFadeIn 0.2s ease-out;
+}
+
+.search-modal-header {
+  padding: 18px 24px;
+  background: rgba(15, 23, 42, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.search-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.search-modal-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.search-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.search-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.search-section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.search-section-heading {
+  font-weight: 700;
+  font-size: 0.98rem;
+  color: #ffffff;
+}
+
+.search-section-tag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.search-results-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.search-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+}
+
+.search-item:hover {
+  background: rgba(56, 189, 248, 0.08);
+  border-color: rgba(56, 189, 248, 0.3);
+  transform: translateY(-1px);
+}
+
+.search-item-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.search-item-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.search-item-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.search-item-source {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.search-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}

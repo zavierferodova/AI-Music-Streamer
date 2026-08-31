@@ -682,6 +682,176 @@ function playSingleUrl(url) {
 }
 
 /* =========================================================================
+   Universal Search Hub (Local Library & Web Results)
+   ========================================================================= */
+async function executeUniversalSearch() {
+  const input = document.getElementById('universal-search-input');
+  const q = input ? input.value.trim() : '';
+  if (!q) return;
+
+  const modal = document.getElementById('search-modal-overlay');
+  const queryDisplay = document.getElementById('search-query-display');
+  const localList = document.getElementById('search-local-list');
+  const webList = document.getElementById('search-web-list');
+  const localCount = document.getElementById('search-local-count');
+  const webCount = document.getElementById('search-web-count');
+
+  if (modal) modal.style.display = 'flex';
+  if (queryDisplay) queryDisplay.innerText = `"${q}"`;
+
+  if (localList) localList.innerHTML = '<div style="color: var(--text-dim); padding: 10px; font-size: 0.85rem;">Searching your local playlists & queue...</div>';
+  if (webList) webList.innerHTML = '<div style="color: var(--text-dim); padding: 10px; font-size: 0.85rem;">Searching YouTube online...</div>';
+
+  try {
+    const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&count=5&web=1`);
+    if (!res.ok) throw new Error('Search failed');
+    const data = await res.json();
+
+    const locals = data.local_results || [];
+    const webs = data.web_results || [];
+
+    if (localCount) localCount.innerText = `${locals.length} found`;
+    if (webCount) webCount.innerText = `${webs.length} found`;
+
+    // Render Local Matches
+    if (localList) {
+      if (locals.length === 0) {
+        localList.innerHTML = '<div style="color: var(--text-muted); padding: 12px; font-size: 0.85rem; text-align: center;">No matching tracks in your playlists or queue.</div>';
+      } else {
+        localList.innerHTML = locals.map(item => {
+          const safeTitle = escapeHtml(item.title || item.url || '');
+          const safeUrl = escapeHtml(item.url || '');
+          const safeSrc = escapeHtml(item.source_label || 'Local');
+          const safeThumb = escapeHtml(item.thumbnail || '');
+
+          const thumbHtml = safeThumb ? `
+            <div class="playback-thumb-box" style="width: 38px; height: 38px;">
+              <img class="playback-thumb-img" src="${safeThumb}" alt="thumb" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+              <div class="playback-thumb-fallback" style="display: none;"><span class="material-symbols-rounded">music_note</span></div>
+            </div>
+          ` : `
+            <div class="playback-thumb-box" style="width: 38px; height: 38px;">
+              <span class="material-symbols-rounded">music_note</span>
+            </div>
+          `;
+
+          return `
+            <li class="search-item">
+              <div class="search-item-info">
+                ${thumbHtml}
+                <div class="search-item-text">
+                  <div class="search-item-title" title="${safeTitle}">${safeTitle}</div>
+                  <div class="search-item-source">
+                    <span class="badge badge-server" style="font-size: 0.7rem; padding: 1px 6px;">${safeSrc}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="search-item-actions">
+                <button class="btn btn-primary" style="padding: 6px 12px; font-size: 0.78rem; min-height: 32px;" onclick="playSingleUrl('${safeUrl}'); closeSearchModal();" title="Play directly">
+                  <span class="material-symbols-rounded" style="font-size: 16px;">play_arrow</span>
+                  <span>Play Local</span>
+                </button>
+                <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.78rem; min-height: 32px;" onclick="quickAddUrlToQueue('${safeUrl}', '${safeTitle}');" title="Add to upcoming queue">
+                  <span class="material-symbols-rounded" style="font-size: 16px;">queue</span>
+                  <span>Queue</span>
+                </button>
+              </div>
+            </li>
+          `;
+        }).join('');
+      }
+    }
+
+    // Render Web Matches
+    if (webList) {
+      if (webs.length === 0) {
+        webList.innerHTML = '<div style="color: var(--text-muted); padding: 12px; font-size: 0.85rem; text-align: center;">No web search results found.</div>';
+      } else {
+        webList.innerHTML = webs.map(item => {
+          const safeTitle = escapeHtml(item.title || item.url || '');
+          const safeUrl = escapeHtml(item.url || '');
+          const safeThumb = escapeHtml(item.thumbnail || (item.id ? `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg` : ''));
+
+          const thumbHtml = safeThumb ? `
+            <div class="playback-thumb-box" style="width: 38px; height: 38px;">
+              <img class="playback-thumb-img" src="${safeThumb}" alt="thumb" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+              <div class="playback-thumb-fallback" style="display: none;"><span class="material-symbols-rounded">public</span></div>
+            </div>
+          ` : `
+            <div class="playback-thumb-box" style="width: 38px; height: 38px;">
+              <span class="material-symbols-rounded">public</span>
+            </div>
+          `;
+
+          return `
+            <li class="search-item">
+              <div class="search-item-info">
+                ${thumbHtml}
+                <div class="search-item-text">
+                  <div class="search-item-title" title="${safeTitle}">${safeTitle}</div>
+                  <div class="search-item-source">
+                    <span class="badge badge-listeners" style="font-size: 0.7rem; padding: 1px 6px;">YouTube</span>
+                  </div>
+                </div>
+              </div>
+              <div class="search-item-actions">
+                <button class="btn btn-accent" style="padding: 6px 12px; font-size: 0.78rem; min-height: 32px;" onclick="playSingleUrl('${safeUrl}'); closeSearchModal();" title="Play from web">
+                  <span class="material-symbols-rounded" style="font-size: 16px;">bolt</span>
+                  <span>Play Web</span>
+                </button>
+                <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.78rem; min-height: 32px;" onclick="quickAddUrlToQueue('${safeUrl}', '${safeTitle}');" title="Add to upcoming queue">
+                  <span class="material-symbols-rounded" style="font-size: 16px;">queue</span>
+                  <span>Queue</span>
+                </button>
+                <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.78rem; min-height: 32px;" onclick="addUrlToPlaylistPrompt('${safeUrl}', '${safeTitle}');" title="Save to Playlist">
+                  <span class="material-symbols-rounded" style="font-size: 16px;">playlist_add</span>
+                  <span>Save</span>
+                </button>
+              </div>
+            </li>
+          `;
+        }).join('');
+      }
+    }
+
+  } catch (err) {
+    if (localList) localList.innerHTML = `<div style="color: var(--rose); padding: 10px;">Search error: ${escapeHtml(err.message)}</div>`;
+    if (webList) webList.innerHTML = `<div style="color: var(--rose); padding: 10px;">Search error: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function closeSearchModal() {
+  const modal = document.getElementById('search-modal-overlay');
+  if (modal) modal.style.display = 'none';
+}
+
+function quickAddUrlToQueue(url, title = '') {
+  sendCommand({ action: 'playback_add', url: url, title: title });
+  showToast(`Added "${title || url}" to upcoming queue`, 'queue');
+}
+
+function addUrlToPlaylistPrompt(url, title = '') {
+  if (currentPlaylists.length === 0) {
+    const plName = prompt('Enter a name for a new playlist to save this track:');
+    if (plName && plName.trim()) {
+      sendCommand({ action: 'playlist_create', name: plName.trim() });
+      setTimeout(() => {
+        sendCommand({ action: 'playlist_add', playlist: plName.trim(), url: url, title: title });
+        showToast(`Saved to playlist "${plName.trim()}"`, 'playlist_add');
+      }, 250);
+    }
+    return;
+  }
+
+  const plNames = currentPlaylists.map(p => p.name).join('\n• ');
+  const target = prompt(`Save track to which playlist?\nAvailable playlists:\n• ${plNames}`, selectedPlaylistName || currentPlaylists[0].name);
+  if (target && target.trim()) {
+    sendCommand({ action: 'playlist_add', playlist: target.trim(), url: url, title: title });
+    showToast(`Saved to playlist "${target.trim()}"`, 'playlist_add');
+  }
+}
+
+/* =========================================================================
    UI State Rendering
    ========================================================================= */
 function applyStatusUpdate(data) {

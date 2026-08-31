@@ -10,6 +10,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 from urllib.parse import urlencode
 
 from music_streamer.config import WS_GUID
@@ -427,6 +428,43 @@ class TestWebServer(unittest.TestCase):
         resp_del = conn.getresponse()
         self.assertEqual(resp_del.status, 200)
         self.assertTrue(json.loads(resp_del.read().decode("utf-8"))["deleted"])
+
+        conn.close()
+
+    @patch("music_streamer.search.search_music")
+    def test_api_search_unified(self, mock_web_search):
+        """Verify GET and POST /api/search return both local and web matches."""
+        from music_streamer.search import SearchResult, SearchResults
+
+        mock_web_search.return_value = SearchResults(
+            query="Chill",
+            provider="youtube",
+            count=1,
+            results=[SearchResult(id="y1", title="Chill Beat Online", url="https://youtube.com/watch?v=y1")],
+        )
+
+        otp = self.security.get_current_otp()
+        _, token = self.security.verify_otp(otp, client_ip="127.0.0.1")
+        auth_header = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+        conn = self._get_connection()
+
+        # 1. GET /api/search?q=Chill
+        conn.request("GET", "/api/search?q=Chill&count=3&web=1")
+        resp_get = conn.getresponse()
+        self.assertEqual(resp_get.status, 200)
+        data_get = json.loads(resp_get.read().decode("utf-8"))
+        self.assertIn("local_results", data_get)
+        self.assertIn("web_results", data_get)
+        self.assertEqual(len(data_get["web_results"]), 1)
+
+        # 2. POST /api/search
+        conn.request("POST", "/api/search", body=json.dumps({"q": "Chill", "count": 3, "web": True}), headers=auth_header)
+        resp_post = conn.getresponse()
+        self.assertEqual(resp_post.status, 200)
+        data_post = json.loads(resp_post.read().decode("utf-8"))
+        self.assertIn("local_results", data_post)
+        self.assertIn("web_results", data_post)
 
         conn.close()
 
