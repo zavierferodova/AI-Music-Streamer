@@ -217,42 +217,25 @@ Listeners on other devices (laptops, phones, browsers) can tune in:
 
 ---
 
-## File Structure
+## Key Project Structure
 
 ```
 ~/music-streamer/
-  music_streamer/   # Core Python package
-    db.py           # SQLite database persistence layer (WAL mode & deduplication)
-    config.py       # Constants, paths, audio parameters
-    security.py     # OTP authentication & session token manager
-    playback.py     # Persistent playback list & fair shuffle cycle engine
-    playlist.py     # Persistent named playlist manager
-    search.py       # Universal music search (YouTube, SoundCloud, Bandcamp, Spotify)
-    engine.py       # AudioEngine (PCM decoder + ALSA sync + silence stream) & Broadcaster
-    ipc.py          # Synchronous Unix domain socket & REST API IPC client
-    server.py       # Threaded HTTP Server, WebSocket Hub (RFC 6455), REST API
-    cli.py          # Unified CLI subcommands & handlers
-  stream.py         # Daemon management (start/stop/status/speaker/silent)
-  play.py           # Start playback (synced speaker + broadcast)
-  play_search.py    # Search & play first result
-  search.py         # Universal music search (text/json/url/id)
-  playback.py       # Persistent playback list management
-  playlist.py       # Named playlists management
-  pause.py          # Pause playback (mutes ALSA + streams silence)
-  resume.py         # Resume playback
-  volume.py         # Master volume control
-  loop.py           # Live loop toggle (repeat|repeat-one|off|toggle|status)
-  otp.py            # One-Time Password (OTP) security manager
-  status.py         # Full status inspector
-  stop.py           # Stop playback (keeps stream alive in silence mode; --all kills daemon)
-  tests/            # Automated test suite (69 tests)
-  web/              # Realtime Web Control Panel UI (HTML + CSS + JS)
-    index.html      # HTML UI with progress bar, skeletons, error banners
-    style.css       # Design tokens, glassmorphism, animations
-    app.js          # Client JS, WebSocket sync, live playlist management
-  runtime/
-    music_streamer.db # SQLite database file (WAL mode)
-    control.sock      # UNIX domain socket IPC
-    stream_server.log # Stream server daemon logs
-    player.log        # Decoder logs
+  music_streamer/       # Core Python package (audio engine, SQLite DB, server & CLI)
+  stream.py             # Server daemon manager (start/stop/status/speaker/silent/public)
+  play.py               # Play direct audio stream / URL
+  play_search.py        # Search and play first result
+  search.py             # Multi-provider music search (YouTube, SoundCloud, Bandcamp)
+  playback.py           # Playback tracklist manager (queue, shuffle, skip, history)
+  playlist.py           # Persistent named playlists manager
+  pause.py / resume.py  # Playback pause / resume controls
+  volume.py             # Master volume & mute controls
+  loop.py               # Live repeat mode toggle
+  status.py             # Full system & player status inspector
+  stop.py               # Stop playback or shut down daemon
+  otp.py                # OTP passcode security manager
+  web/                  # Web Control Panel (built & served from web/out/)
+  runtime/              # SQLite database (music_streamer.db), IPC socket, and logs
+  requirements.txt      # Python dependencies
+  tests/                # Automated test suite
 ```

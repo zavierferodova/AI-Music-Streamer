@@ -15,14 +15,44 @@ Stream audio from YouTube, SoundCloud, Bandcamp, or direct URLs to your local AL
 
 ---
 
-## Requirements
+## Requirements & Linux System Libraries
 
-- `yt-dlp`, `ffmpeg`, `alsa-utils`, `python3` (>= 3.10)
-- A working ALSA sound device (`aplay -l`)
-- `node` (used as JS runtime for YouTube extraction challenges)
+This project requires Python 3.10+ and standard Linux audio/media libraries:
+
+### Required Linux Packages & Libraries
+- **`ffmpeg`**: Audio decoding from media streams and continuous MP3 live broadcast encoding.
+- **`alsa-utils`**: Hardware ALSA sound control (`aplay` for speaker playback and `amixer` for volume/mute control).
+- **`libasound2` & `libasound2-plugins`**: Core Linux ALSA sound architecture runtime libraries and device plugins.
+- **`yt-dlp`**: Fast audio extractor supporting YouTube, SoundCloud, Bandcamp, and direct media URLs.
+- **`nodejs` / `node`**: JavaScript runtime engine utilized by `yt-dlp` to solve extraction challenges.
+- **`python3-venv` & `python3-pip`**: Python virtual environment and package installer.
+
+### Optional Tools
+- **`cloudflared`**: For instant zero-config public HTTPS tunneling (`./stream.py --public` / `./stream.py public`).
+- **`mpv`**: Lightweight CLI audio player for testing stream playback.
+
+### 1. Install Linux System Dependencies
+
+**Ubuntu / Debian:**
+```bash
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip ffmpeg alsa-utils libasound2 libasound2-plugins yt-dlp nodejs mpv curl
+```
+
+**Arch Linux:**
+```bash
+sudo pacman -S python python-pip ffmpeg alsa-utils alsa-lib yt-dlp nodejs mpv curl
+```
+
+### 2. Python Virtual Environment Setup
 
 ```bash
-sudo apt install -y yt-dlp ffmpeg alsa-utils nodejs python3 mpv
+# Create and activate virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
 ```
 
 ---
