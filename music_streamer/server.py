@@ -429,11 +429,13 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             self.send_header("Pragma", "no-cache")
             self.send_header("Expires", "0")
             self.send_header("Connection", "close")
+            self.send_header("X-Accel-Buffering", "no")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("icy-name", "Music Streamer Live Broadcast")
             self.send_header("icy-genre", "Live Stream")
             self.send_header("icy-br", "128")
             self.end_headers()
+            self.wfile.flush()
 
             if head_only:
                 return
@@ -451,6 +453,7 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
                     try:
                         chunk = client_queue.get(timeout=5.0)
                         self.wfile.write(chunk)
+                        self.wfile.flush()
                     except queue.Empty:
                         continue
             except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
