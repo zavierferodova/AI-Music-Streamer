@@ -262,7 +262,7 @@ class TestWebServer(unittest.TestCase):
         self.assertEqual(resp.status, 200)
         self.assertEqual(json.loads(resp.read().decode("utf-8"))["mode"], "speaker")
 
-        # POST /api/playback/add
+        # POST /api/playback/add (Initial)
         conn.request(
             "POST",
             "/api/playback/add",
@@ -271,7 +271,21 @@ class TestWebServer(unittest.TestCase):
         )
         resp = conn.getresponse()
         self.assertEqual(resp.status, 200)
-        resp.read()
+        data_first = json.loads(resp.read().decode("utf-8"))
+        self.assertFalse(data_first.get("already_exists", True))
+
+        # POST /api/playback/add (Duplicate)
+        conn.request(
+            "POST",
+            "/api/playback/add",
+            body=json.dumps({"url": "https://youtube.com/watch?v=abc", "title": "Web Song"}),
+            headers=auth_header,
+        )
+        resp_dup = conn.getresponse()
+        self.assertEqual(resp_dup.status, 200)
+        data_dup = json.loads(resp_dup.read().decode("utf-8"))
+        self.assertTrue(data_dup.get("already_exists", False))
+        self.assertEqual(data_dup.get("status"), "already_exists")
 
         # POST /api/playback/shuffle
         conn.request("POST", "/api/playback/shuffle", body=json.dumps({}), headers=auth_header)

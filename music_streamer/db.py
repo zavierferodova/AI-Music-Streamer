@@ -334,7 +334,9 @@ class DatabaseManager:
                         (new_status, title or url, thumbnail or "", existing_id),
                     )
                     cur.close()
-                    return self.get_track_by_id(existing_id) or dict(existing)
+                    res = self.get_track_by_id(existing_id) or dict(existing)
+                    res["already_exists"] = True
+                    return res
 
             # Find next sort order
             cur.execute("SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM playback_tracks;")
@@ -350,6 +352,7 @@ class DatabaseManager:
                 "sort_order": next_order,
                 "added_at": now,
                 "played_at": None,
+                "already_exists": False,
             }
             cur.execute(
                 """
@@ -707,7 +710,9 @@ class DatabaseManager:
                         (title or url, thumbnail or "", existing["id"]),
                     )
                     cur.close()
-                    return dict(existing)
+                    res = dict(existing)
+                    res["already_exists"] = True
+                    return res
 
             import uuid
 
@@ -736,6 +741,7 @@ class DatabaseManager:
             "thumbnail": thumbnail,
             "sort_order": next_order,
             "added_at": now,
+            "already_exists": False,
         }
 
     def remove_track_from_playlist(self, name_or_id: str, track_id_or_index: Any) -> bool:

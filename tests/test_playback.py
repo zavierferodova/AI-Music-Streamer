@@ -223,6 +223,16 @@ class TestPlaybackManager(unittest.TestCase):
         self.assertEqual(t_last["title"], "Song 3")
         self.assertTrue(is_cycle)
 
+    def test_add_duplicate_track_flag(self):
+        """Verify adding track with existing URL returns already_exists=True without duplicate entries."""
+        t1 = self.playback.add_track("https://youtube.com/watch?v=dup123", "Song Dup")
+        self.assertFalse(t1.get("already_exists", False))
+        self.assertEqual(self.playback.get_state()["total_count"], 1)
+
+        t2 = self.playback.add_track("https://youtube.com/watch?v=dup123", "Song Dup")
+        self.assertTrue(t2.get("already_exists", False))
+        self.assertEqual(self.playback.get_state()["total_count"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

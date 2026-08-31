@@ -718,9 +718,19 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
         elif path in ["/api/playback/add", "/api/queue/add"]:
             url = payload.get("url")
             title = payload.get("title") or url
+            t = None
             if url:
-                mgr.add_track(url, title)
-            self._send_json({"status": "ok"})
+                t = mgr.add_track(url, title)
+            self.server.ws_hub.broadcast()
+            if t and t.get("already_exists"):
+                self._send_json({
+                    "status": "already_exists",
+                    "already_exists": True,
+                    "message": f"Track already exists in playback tracklist: {t.get('title', url)}",
+                    "track": t,
+                })
+            else:
+                self._send_json({"status": "ok", "already_exists": False, "track": t})
 
         elif path in ["/api/playback/clear", "/api/queue/clear"]:
             mgr.clear_all()
@@ -758,7 +768,15 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             title = payload.get("title", "")
             t = self.server.playlist_mgr.add_track(target, url=url, title=title)
             self.server.ws_hub.broadcast()
-            self._send_json({"status": "ok", "track": t})
+            if t and t.get("already_exists"):
+                self._send_json({
+                    "status": "already_exists",
+                    "already_exists": True,
+                    "message": f"Track already exists in playlist: {t.get('title', url)}",
+                    "track": t,
+                })
+            else:
+                self._send_json({"status": "ok", "already_exists": False, "track": t})
 
         elif path == "/api/playlist/remove":
             target = payload.get("playlist") or payload.get("name") or payload.get("id")

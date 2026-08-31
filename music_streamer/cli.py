@@ -524,7 +524,10 @@ def handle_playback(args: argparse.Namespace) -> int:
         inp = " ".join(targets)
         if inp.startswith("http://") or inp.startswith("https://"):
             t = playback_mgr.add_track(inp)
-            print(f"Added to playback list: {t['title']}")
+            if t and t.get("already_exists"):
+                print(f"⚠️ Track already exists in playback tracklist: {t['title']}")
+            else:
+                print(f"Added to playback list: {t['title']}")
         else:
             print(f"Searching: {inp}")
             res = search_music(inp, num=1)
@@ -533,7 +536,10 @@ def handle_playback(args: argparse.Namespace) -> int:
                 return 2
             r = res.results[0]
             t = playback_mgr.add_track(r.url, r.title)
-            print(f"Added to playback list: {t['title']}")
+            if t and t.get("already_exists"):
+                print(f"⚠️ Track already exists in playback tracklist: {t['title']}")
+            else:
+                print(f"Added to playback list: {t['title']}")
         send_ipc_command({"action": "playback_update"})
         return 0
 
@@ -544,7 +550,10 @@ def handle_playback(args: argparse.Namespace) -> int:
         url = targets[0]
         title = " ".join(targets[1:]) if len(targets) > 1 else url
         t = playback_mgr.add_track(url, title)
-        print(f"Added to playback list: {t['title']}")
+        if t and t.get("already_exists"):
+            print(f"⚠️ Track already exists in playback tracklist: {t['title']}")
+        else:
+            print(f"Added to playback list: {t['title']}")
         send_ipc_command({"action": "playback_update"})
         return 0
 
@@ -747,7 +756,10 @@ def handle_playlist(args: argparse.Namespace) -> int:
         try:
             print(f"Adding to playlist '{pl_name}': {inp}")
             t = playlist_mgr.add_track(pl_name, inp)
-            print(f"✓ Added to '{pl_name}': {t['title']}")
+            if t and t.get("already_exists"):
+                print(f"⚠️ Track already exists in playlist '{pl_name}': {t['title']}")
+            else:
+                print(f"✓ Added to '{pl_name}': {t['title']}")
             send_ipc_command({"action": "playlist_update"})
             return 0
         except Exception as e:

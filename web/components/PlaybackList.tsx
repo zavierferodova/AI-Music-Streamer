@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   Clock,
   Radio,
+  AlertCircle,
 } from "lucide-react";
 import { ServerStatus } from "@/types";
 import { formatTrackDisplay } from "@/lib/utils";
@@ -291,6 +292,19 @@ export function PlaybackList({
           </button>
         </div>
       </div>
+
+      {/* Duplicate Notice */}
+      {Boolean(quickInput.trim()) &&
+        tracks.some(
+          (t) =>
+            t.url?.trim().toLowerCase() === quickInput.trim().toLowerCase() ||
+            (t.title && t.title.toLowerCase() === quickInput.trim().toLowerCase())
+        ) && (
+          <div className="flex items-center gap-1.5 text-xs text-amber-400 mt-2 px-1 animate-in fade-in">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+            <span>This track is already in the playback list.</span>
+          </div>
+        )}
     </section>
   );
 }

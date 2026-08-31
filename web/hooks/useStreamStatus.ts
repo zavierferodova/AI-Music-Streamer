@@ -167,10 +167,25 @@ export function useStreamStatus() {
 
   const addTrackToPlayback = useCallback(
     (url: string, title: string = "") => {
-      sendCommand({ action: "playback_add", url, title });
-      showToast("Adding track to playback list...", "success", "playlist_add");
+      const cleanUrl = url.trim();
+      const existingTracks = status?.playback?.tracks || status?.queue?.tracks || [];
+      const existing = existingTracks.find(
+        (t) =>
+          t.url?.trim().toLowerCase() === cleanUrl.toLowerCase() ||
+          (t.title && cleanUrl && t.title.toLowerCase() === cleanUrl.toLowerCase())
+      );
+
+      sendCommand({ action: "playback_add", url: cleanUrl, title });
+      if (existing) {
+        showToast(
+          `Track "${existing.title || title || cleanUrl}" already exists in playback list`,
+          "warning"
+        );
+      } else {
+        showToast("Added track to playback list", "success", "playlist_add");
+      }
     },
-    [sendCommand, showToast]
+    [status, sendCommand, showToast]
   );
 
   const interruptPlay = useCallback(

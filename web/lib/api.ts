@@ -155,17 +155,28 @@ export async function deletePlaylist(name: string): Promise<boolean> {
   }
 }
 
-export async function addTrackToPlaylist(playlist: string, url: string, title: string = ""): Promise<boolean> {
+export async function addTrackToPlaylist(
+  playlist: string,
+  url: string,
+  title: string = ""
+): Promise<{ success: boolean; already_exists?: boolean; message?: string; track?: any }> {
   try {
     const res = await fetch("/api/playlist/add", {
       method: "POST",
       headers: getHeaders(),
       body: JSON.stringify({ playlist, url, title }),
     });
-    return res.ok;
-  } catch (err) {
+    if (!res.ok) return { success: false, message: `Request failed with status ${res.status}` };
+    const data = await res.json();
+    return {
+      success: true,
+      already_exists: Boolean(data.already_exists || data.status === "already_exists"),
+      message: data.message,
+      track: data.track,
+    };
+  } catch (err: any) {
     console.error("addTrackToPlaylist error:", err);
-    return false;
+    return { success: false, message: err?.message || "Network error" };
   }
 }
 

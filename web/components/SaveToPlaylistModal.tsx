@@ -54,13 +54,17 @@ export function SaveToPlaylistModal({
         await createPlaylist(targetName);
       }
 
-      const ok = await addTrackToPlaylist(targetName, trackData.url, trackData.title);
-      if (ok) {
-        showToast(`Saved to playlist "${targetName}"!`, "success", "playlist_add");
+      const result = await addTrackToPlaylist(targetName, trackData.url, trackData.title);
+      if (result.success) {
+        if (result.already_exists) {
+          showToast(`Track "${display.title}" already exists in playlist "${targetName}"`, "warning");
+        } else {
+          showToast(`Saved to playlist "${targetName}"!`, "success", "playlist_add");
+        }
         onRefreshPlaylists();
         onClose();
       } else {
-        showToast("Failed to save track", "error", "error_outline");
+        showToast(result.message || "Failed to save track", "error", "error_outline");
       }
     } catch (err: any) {
       showToast(err?.message || "Failed to save track", "error", "error_outline");

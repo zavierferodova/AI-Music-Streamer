@@ -142,13 +142,17 @@ export function PlaylistExplorer({
     const val = newTrackInput.trim();
     setNewTrackInput("");
     showToast(`Adding track to "${selectedPlaylistName}"...`, "info", "playlist_add");
-    const ok = await addTrackToPlaylist(selectedPlaylistName, val);
-    if (ok) {
-      showToast(`Added track to "${selectedPlaylistName}"!`, "success", "check_circle");
+    const result = await addTrackToPlaylist(selectedPlaylistName, val);
+    if (result.success) {
+      if (result.already_exists) {
+        showToast(`Track "${result.track?.title || val}" already exists in playlist "${selectedPlaylistName}"`, "warning");
+      } else {
+        showToast(`Added track to "${selectedPlaylistName}"!`, "success", "check_circle");
+      }
       loadPlaylistDetails(selectedPlaylistName, false);
       onRefreshStatus();
     } else {
-      showToast("Failed to add track", "error", "error_outline");
+      showToast(result.message || "Failed to add track", "error", "error_outline");
     }
   };
 

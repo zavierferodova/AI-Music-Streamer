@@ -192,6 +192,17 @@ class TestPlaylistManager(unittest.TestCase):
         self.assertFalse(res["success"])
         self.assertIn("already exists", res["error"])
 
+    def test_add_duplicate_track_to_playlist_flag(self):
+        """Verify adding existing URL to playlist returns already_exists=True without creating duplicate rows."""
+        self.playlist_mgr.create_playlist("Unique List")
+        t1 = self.playlist_mgr.add_track("Unique List", "https://youtube.com/watch?v=same_url", "Song Same", auto_fetch=False)
+        self.assertFalse(t1.get("already_exists", False))
+        self.assertEqual(self.playlist_mgr.get_playlist("Unique List")["track_count"], 1)
+
+        t2 = self.playlist_mgr.add_track("Unique List", "https://youtube.com/watch?v=same_url", "Song Same", auto_fetch=False)
+        self.assertTrue(t2.get("already_exists", False))
+        self.assertEqual(self.playlist_mgr.get_playlist("Unique List")["track_count"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
