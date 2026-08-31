@@ -360,6 +360,65 @@ class TestWebServer(unittest.TestCase):
         s.close()
         conn.close()
 
+    def test_playlist_rest_api_lifecycle(self):
+        """Verify REST API lifecycle for multiple playlists."""
+        otp = self.security.get_current_otp()
+        _, token = self.security.verify_otp(otp, client_ip="127.0.0.1")
+        auth_header = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+        conn = self._get_connection()
+
+        # 1. Create two playlists
+        conn.request("POST", "/api/playlist/create", body=json.dumps({"name": "Chill Lounge"}), headers=auth_header)
+        resp1 = conn.getresponse()
+        self.assertEqual(resp1.status, 200)
+        self.assertEqual(json.loads(resp1.read().decode("utf-8"))["playlist"]["name"], "Chill Lounge")
+
+        conn.request("POST", "/api/playlist/create", body=json.dumps({"name": "Workout Mix"}), headers=auth_header)
+        resp2 = conn.getresponse()
+        self.assertEqual(resp2.status, 200)
+        resp2.read()
+
+        # 2. Add track to "Chill Lounge"
+        conn.request(
+            "POST",
+            "/api/playlist/add",
+            body=json.dumps({"playlist": "Chill Lounge", "url": "https://youtube.com/watch?v=chill1", "title": "Chill Song 1"}),
+            headers=auth_header,
+        )
+        resp_add = conn.getresponse()
+        self.assertEqual(resp_add.status, 200)
+        resp_add.read()
+
+        # 3. GET /api/playlists
+        conn.request("GET", "/api/playlists")
+        resp_list = conn.getresponse()
+        self.assertEqual(resp_list.status, 200)
+        data_list = json.loads(resp_list.read().decode("utf-8"))
+        self.assertEqual(len(data_list["playlists"]), 2)
+
+        # 4. GET /api/playlist?name=Chill%20Lounge
+        conn.request("GET", "/api/playlist?name=Chill%20Lounge")
+        resp_single = conn.getresponse()
+        self.assertEqual(resp_single.status, 200)
+        data_single = json.loads(resp_single.read().decode("utf-8"))
+        self.assertEqual(data_single["playlist"]["name"], "Chill Lounge")
+        self.assertEqual(data_single["playlist"]["track_count"], 1)
+
+        # 5. Play playlist
+        conn.request("POST", "/api/playlist/play", body=json.dumps({"playlist": "Chill Lounge"}), headers=auth_header)
+        resp_play = conn.getresponse()
+        self.assertEqual(resp_play.status, 200)
+        self.assertTrue(json.loads(resp_play.read().decode("utf-8"))["success"])
+
+        # 6. Delete playlist
+        conn.request("POST", "/api/playlist/delete", body=json.dumps({"name": "Workout Mix"}), headers=auth_header)
+        resp_del = conn.getresponse()
+        self.assertEqual(resp_del.status, 200)
+        self.assertTrue(json.loads(resp_del.read().decode("utf-8"))["deleted"])
+
+        conn.close()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -34,7 +34,8 @@ All audio is decoded from YouTube (or SoundCloud/Bandcamp) via `yt-dlp` → `ffm
 | `~/music-streamer/play.py` | Play a direct URL: `<URL> [VOL 0-100] [LOOP yes\|no]` — synchronized on speaker & HTTP stream |
 | `~/music-streamer/play_search.py` | Search by query and play first result: `<query> [VOL] [LOOP]` — USE ONLY AFTER CONFIRMATION |
 | `~/music-streamer/search.py` | Search provider: `youtube` (default), `soundcloud`, `bandcamp`, `spotify` |
-| `~/music-streamer/playback.py` | Persistent Playback tracklist: `add/add-url/list/clear/shuffle/remove/next/play` |
+| `~/music-streamer/playback.py` | Ephemeral Playback tracklist: `add/add-url/list/clear/shuffle/remove/next/play` |
+| `~/music-streamer/playlist.py` | Persistent Named Playlists: `create/list/show/add/remove/delete/play/queue` (cannot be cleared by playback clear) |
 | `~/music-streamer/pause.py` | Pause: mutes ALSA speaker and streams silence to clients |
 | `~/music-streamer/resume.py` | Resume: unmutes ALSA speaker and resumes audio stream in sync |
 | `~/music-streamer/volume.py` | Get/set/mute/unmute volume (synced with Master: `+N`/`-N`, `mute`, `unmute`, absolute `0-100`) |
@@ -133,6 +134,17 @@ When a user asks to play a search query, search via `search.py --json` and prese
 ~/music-streamer/playback.py clear             # Clear entire playback list
 ~/music-streamer/playback.py next              # Skip current track, play next in list
 ~/music-streamer/playback.py play 1            # Jump directly to track #1
+
+# Persistent Named Playlists (Permanent collections stored in SQLite)
+~/music-streamer/playlist.py create "Favorites"       # Create a new playlist
+~/music-streamer/playlist.py list [--json]            # List all playlists with track counts
+~/music-streamer/playlist.py show "Favorites" [--json]# View tracks inside playlist
+~/music-streamer/playlist.py add "Favorites" "<URL>"  # Add track (auto metadata resolution)
+~/music-streamer/playlist.py remove "Favorites" 1     # Remove track #1 from playlist
+~/music-streamer/playlist.py play "Favorites"         # Load and play in sequential order
+~/music-streamer/playlist.py play "Favorites" --shuffle # Load and play in fair shuffle mode
+~/music-streamer/playlist.py queue "Favorites"        # Append playlist tracks to current queue
+~/music-streamer/playlist.py delete "Favorites"       # Delete playlist
 
 # Playback state
 ~/music-streamer/pause.py                   # Pause playback (streams silence to clients)

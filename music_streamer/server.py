@@ -22,6 +22,7 @@ from music_streamer.config import INDEX_HTML_PATH, SOCKET_PATH, WEB_DIR, WS_GUID
 from music_streamer.db import DatabaseManager, db
 from music_streamer.engine import AudioEngine, Broadcaster
 from music_streamer.playback import PlaybackManager, get_thumbnail_for_url, playback_mgr
+from music_streamer.playlist import PlaylistManager, playlist_mgr
 from music_streamer.security import OTPManager, security
 
 
@@ -148,6 +149,7 @@ def build_server_status(
             "mode": playback_state["mode"],
             "tracks": playback_state["queued_tracks"],
         },
+        "playlists": db_inst.get_playlists(),
         "next": playback_state["next"],
         "clients_connected": client_cnt,
         "stream_url": f"http://{host_header}/stream.mp3",
@@ -288,6 +290,38 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
                         "authenticated": authed,
                     }).encode("utf-8")
                 )
+            return
+
+        elif path == "/api/playlists":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "no-cache, no-store")
+            self.end_headers()
+            if not head_only:
+                pls = self.server.playlist_mgr.get_playlists()
+                self.wfile.write(json.dumps({"status": "ok", "playlists": pls}).encode("utf-8"))
+            return
+
+        elif path == "/api/playlist":
+            qs = parse_qs(parsed.query)
+            target = qs.get("name", [""])[0] or qs.get("id", [""])[0] or qs.get("playlist", [""])[0]
+            pl = self.server.playlist_mgr.get_playlist(target) if target else None
+            if pl:
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-cache, no-store")
+                self.end_headers()
+                if not head_only:
+                    self.wfile.write(json.dumps({"status": "ok", "playlist": pl}).encode("utf-8"))
+            else:
+                self.send_response(404)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                if not head_only:
+                    self.wfile.write(b'{"status": "error", "message": "Playlist not found"}\n')
             return
 
         elif path == "/" or path == "/index.html":
@@ -476,6 +510,35 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             mgr.clear_all()
         elif action == "playback_reset_history":
             mgr.reset_history()
+        elif action == "playlist_create":
+            name = payload.get("name")
+            if name:
+                self.server.playlist_mgr.create_playlist(name)
+        elif action == "playlist_delete":
+            target = payload.get("name") or payload.get("id") or payload.get("playlist")
+            if target:
+                self.server.playlist_mgr.delete_playlist(target)
+        elif action == "playlist_add":
+            target = payload.get("playlist") or payload.get("name") or payload.get("id")
+            url = payload.get("url")
+            title = payload.get("title", "")
+            if target and url:
+                self.server.playlist_mgr.add_track(target, url=url, title=title)
+        elif action == "playlist_remove":
+            target = payload.get("playlist") or payload.get("name") or payload.get("id")
+            idx = payload.get("index") if payload.get("index") is not None else payload.get("id")
+            if target and idx is not None:
+                self.server.playlist_mgr.remove_track(target, idx)
+        elif action == "playlist_play":
+            target = payload.get("playlist") or payload.get("name") or payload.get("id")
+            if target:
+                res = self.server.playlist_mgr.play_playlist(target, shuffle=bool(payload.get("shuffle", False)))
+                if res.get("success"):
+                    engine.post_command({"action": "play"})
+        elif action == "playlist_queue":
+            target = payload.get("playlist") or payload.get("name") or payload.get("id")
+            if target:
+                self.server.playlist_mgr.queue_playlist(target, shuffle=bool(payload.get("shuffle", False)))
         elif action == "mode":
             mode = payload.get("mode")
             if mode:
@@ -623,6 +686,41 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             mgr.reset_history()
             self._send_json({"status": "ok"})
 
+        elif path == "/api/playlist/create":
+            name = payload.get("name") or "New Playlist"
+            pl = self.server.playlist_mgr.create_playlist(name)
+            self._send_json({"status": "ok", "playlist": pl})
+
+        elif path == "/api/playlist/delete":
+            target = payload.get("name") or payload.get("id") or payload.get("playlist")
+            ok = self.server.playlist_mgr.delete_playlist(target) if target else False
+            self._send_json({"status": "ok" if ok else "error", "deleted": ok})
+
+        elif path == "/api/playlist/add":
+            target = payload.get("playlist") or payload.get("name") or payload.get("id")
+            url = payload.get("url")
+            title = payload.get("title", "")
+            t = self.server.playlist_mgr.add_track(target, url=url, title=title)
+            self._send_json({"status": "ok", "track": t})
+
+        elif path == "/api/playlist/remove":
+            target = payload.get("playlist") or payload.get("name") or payload.get("id")
+            idx = payload.get("index") if payload.get("index") is not None else payload.get("id")
+            ok = self.server.playlist_mgr.remove_track(target, idx)
+            self._send_json({"status": "ok" if ok else "error", "removed": ok})
+
+        elif path == "/api/playlist/play":
+            target = payload.get("playlist") or payload.get("name") or payload.get("id")
+            res = self.server.playlist_mgr.play_playlist(target, shuffle=bool(payload.get("shuffle", False)))
+            if res.get("success"):
+                engine.post_command({"action": "play"})
+            self._send_json(res)
+
+        elif path == "/api/playlist/queue":
+            target = payload.get("playlist") or payload.get("name") or payload.get("id")
+            res = self.server.playlist_mgr.queue_playlist(target, shuffle=bool(payload.get("shuffle", False)))
+            self._send_json(res)
+
         elif path == "/api/mode":
             mode = payload.get("mode")
             if mode:
@@ -686,6 +784,7 @@ class ThreadedStreamServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
         self.db = database or engine.db
         self.security = OTPManager(self.db)
         self.playback_mgr = PlaybackManager(self.db)
+        self.playlist_mgr = PlaylistManager(self.db, self.playback_mgr)
         self.start_time = time.time()
         self.ws_hub = WebSocketHub(self)
         self.engine.on_state_change = lambda: self.ws_hub.broadcast()

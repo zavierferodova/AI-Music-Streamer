@@ -36,7 +36,8 @@ sudo apt install -y yt-dlp ffmpeg alsa-utils nodejs python3 mpv
 | `./play.py` | Start playback: `<URL> [VOL 0-100] [LOOP yes\|no]` — plays in sync on speaker & stream |
 | `./play_search.py` | Search by query and immediately play first result |
 | `./search.py` | Search YouTube/SoundCloud/Bandcamp, return IDs/titles/URLs (`--json`, `--first`) |
-| `./playback.py` | Persistent Playback tracklist: `add/add-url/list/clear/shuffle/remove/next/play` |
+| `./playback.py` | Ephemeral Playback tracklist: `add/add-url/list/clear/shuffle/remove/next/play` |
+| `./playlist.py` | Persistent Named Playlists: `create/list/show/add/remove/delete/play/queue` |
 | `./pause.py` | Pause playback (mutes ALSA speaker and streams silence to clients) |
 | `./resume.py` | Resume playback (unmutes ALSA and resumes audio stream) |
 | `./volume.py` | Show / set / mute / unmute volume (`0-100`, `+N`, `-N`, `mute`, `unmute`) |

@@ -10,6 +10,8 @@ let currentPlaybackMode = 'ordered';
 let currentVolume = 80;
 let previousVolume = 80;
 let volumeDebounceTimer = null;
+let currentPlaylists = [];
+let selectedPlaylistName = null;
 let isSecurityEnabled = true;
 let isAuthenticated = false;
 
@@ -465,6 +467,177 @@ function toggleMuteVolume() {
 }
 
 /* =========================================================================
+   Playlists Management
+   ========================================================================= */
+async function loadActivePlaylist(name) {
+  if (!name) return;
+  selectedPlaylistName = name;
+  try {
+    const res = await fetch(`/api/playlist?name=${encodeURIComponent(name)}`);
+    if (res.ok) {
+      const data = await res.json();
+      renderActivePlaylist(data.playlist);
+    }
+  } catch (e) {
+    console.error('Failed to load playlist:', e);
+  }
+}
+
+function renderPlaylistTabs(pls) {
+  currentPlaylists = pls || [];
+  const totalBadge = document.getElementById('playlists-total-badge');
+  if (totalBadge) totalBadge.innerText = currentPlaylists.length;
+
+  const container = document.getElementById('playlist-tabs-container');
+  if (!container) return;
+
+  if (currentPlaylists.length === 0) {
+    container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 4px 0;">No playlists created yet. Click "+ New Playlist" to create your first playlist!</div>';
+    document.getElementById('active-playlist-toolbar').style.display = 'none';
+    document.getElementById('playlist-add-box').style.display = 'none';
+    document.getElementById('playlist-tracks-container').innerHTML = '<div class="playback-empty">No active playlist selected.</div>';
+    selectedPlaylistName = null;
+    return;
+  }
+
+  if (!selectedPlaylistName || !currentPlaylists.some(p => p.name.toLowerCase() === selectedPlaylistName.toLowerCase())) {
+    selectedPlaylistName = currentPlaylists[0].name;
+  }
+
+  container.innerHTML = currentPlaylists.map(p => {
+    const isSel = (p.name.toLowerCase() === selectedPlaylistName.toLowerCase());
+    return `
+      <div class="playlist-tab-chip ${isSel ? 'active' : ''}" onclick="selectPlaylist('${escapeHtml(p.name)}')">
+        <span class="material-symbols-rounded" style="font-size: 16px;">queue_music</span>
+        <span>${escapeHtml(p.name)}</span>
+        <span class="badge">${p.track_count || 0}</span>
+      </div>
+    `;
+  }).join('');
+
+  loadActivePlaylist(selectedPlaylistName);
+}
+
+function selectPlaylist(name) {
+  selectedPlaylistName = name;
+  renderPlaylistTabs(currentPlaylists);
+}
+
+function renderActivePlaylist(pl) {
+  if (!pl) return;
+  const toolbar = document.getElementById('active-playlist-toolbar');
+  const addBox = document.getElementById('playlist-add-box');
+  const nameElem = document.getElementById('active-playlist-name');
+  const countElem = document.getElementById('active-playlist-track-count');
+  const listElem = document.getElementById('playlist-tracks-container');
+
+  if (toolbar) toolbar.style.display = 'flex';
+  if (addBox) addBox.style.display = 'flex';
+  if (nameElem) nameElem.innerText = pl.name;
+  if (countElem) countElem.innerText = `${pl.tracks?.length || 0} tracks`;
+
+  const tracks = pl.tracks || [];
+  if (tracks.length === 0) {
+    listElem.innerHTML = '<div class="playback-empty">This playlist is empty. Add songs using the input below!</div>';
+    return;
+  }
+
+  listElem.innerHTML = tracks.map((t, idx) => {
+    const safeTitle = escapeHtml(t.title || t.url || '');
+    const safeUrl = escapeHtml(t.url || '');
+    const safeThumb = escapeHtml(t.thumbnail || '');
+
+    const thumbHtml = safeThumb ? `
+      <div class="playback-thumb-box">
+        <img class="playback-thumb-img" src="${safeThumb}" alt="thumb" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+        <div class="playback-thumb-fallback" style="display: none;"><span class="material-symbols-rounded">music_note</span></div>
+      </div>
+    ` : `
+      <div class="playback-thumb-box">
+        <span class="material-symbols-rounded">music_note</span>
+      </div>
+    `;
+
+    return `
+      <li class="playback-item">
+        <span class="track-badge badge-item-queued">#${idx + 1}</span>
+        ${thumbHtml}
+        <div class="playback-item-info">
+          <div class="playback-item-title">${safeTitle}</div>
+          <div class="playback-item-url">${safeUrl}</div>
+        </div>
+        <div class="playback-item-actions">
+          <button class="btn-item-action btn-item-play" title="Play directly" onclick="playSingleUrl('${escapeHtml(t.url)}')">
+            <span class="material-symbols-rounded">play_arrow</span><span>Play</span>
+          </button>
+          <button class="btn-item-action btn-item-remove" title="Remove track from playlist" onclick="removePlaylistTrackItem(${idx})">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </div>
+      </li>
+    `;
+  }).join('');
+}
+
+function openNewPlaylistPrompt() {
+  const name = prompt('Enter a name for the new playlist:');
+  if (name && name.trim()) {
+    const clean = name.trim();
+    sendCommand({ action: 'playlist_create', name: clean });
+    selectedPlaylistName = clean;
+    showToast(`Created playlist "${clean}"`, 'library_add');
+    setTimeout(() => updateStatus(), 200);
+  }
+}
+
+function deleteActivePlaylist() {
+  if (!selectedPlaylistName) return;
+  if (confirm(`Are you sure you want to delete playlist "${selectedPlaylistName}"?`)) {
+    const target = selectedPlaylistName;
+    sendCommand({ action: 'playlist_delete', playlist: target });
+    showToast(`Deleted playlist "${target}"`, 'delete');
+    selectedPlaylistName = null;
+    setTimeout(() => updateStatus(), 200);
+  }
+}
+
+function playActivePlaylist(shuffle = false) {
+  if (!selectedPlaylistName) return;
+  sendCommand({ action: 'playlist_play', playlist: selectedPlaylistName, shuffle });
+  showToast(`Playing playlist "${selectedPlaylistName}" (${shuffle ? 'Shuffled' : 'Ordered'})`, shuffle ? 'shuffle' : 'play_arrow');
+}
+
+function queueActivePlaylist(shuffle = false) {
+  if (!selectedPlaylistName) return;
+  sendCommand({ action: 'playlist_queue', playlist: selectedPlaylistName, shuffle });
+  showToast(`Queued playlist "${selectedPlaylistName}"`, 'queue');
+}
+
+function addTrackToActivePlaylist() {
+  if (!selectedPlaylistName) return;
+  const input = document.getElementById('playlist-add-input');
+  const val = input.value.trim();
+  if (!val) return;
+
+  sendCommand({ action: 'playlist_add', playlist: selectedPlaylistName, url: val });
+  input.value = '';
+  showToast(`Adding track to "${selectedPlaylistName}"...`, 'playlist_add');
+  setTimeout(() => loadActivePlaylist(selectedPlaylistName), 400);
+}
+
+function removePlaylistTrackItem(idx) {
+  if (!selectedPlaylistName) return;
+  sendCommand({ action: 'playlist_remove', playlist: selectedPlaylistName, index: idx });
+  showToast('Removed track from playlist', 'close');
+  setTimeout(() => loadActivePlaylist(selectedPlaylistName), 300);
+}
+
+function playSingleUrl(url) {
+  sendCommand({ action: 'interrupt', url: url });
+  showToast('Starting track playback...', 'play_arrow');
+}
+
+/* =========================================================================
    UI State Rendering
    ========================================================================= */
 function applyStatusUpdate(data) {
@@ -476,6 +649,11 @@ function applyStatusUpdate(data) {
   
   const playbackData = data.playback || {};
   currentPlaybackMode = playbackData.mode || data.queue?.mode || 'ordered';
+
+  // Playlists Library synchronization
+  if (data.playlists) {
+    renderPlaylistTabs(data.playlists);
+  }
 
   // Volume Synchronization
   if (data.volume !== undefined) {

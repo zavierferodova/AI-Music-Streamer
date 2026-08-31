@@ -281,6 +281,69 @@
         </button>
       </div>
     </section>
+
+    <!-- Persistent Playlists Library Section -->
+    <section class="playback-card" aria-label="Persistent Playlists Library" style="margin-top: 24px;">
+      <div class="playback-header">
+        <div class="playback-title">
+          <span class="material-symbols-rounded">library_music</span>
+          <span>Playlists Library</span>
+          <span class="badge badge-listeners" id="playlists-total-badge">0</span>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button class="btn btn-primary" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="openNewPlaylistPrompt()">
+            <span class="material-symbols-rounded">add</span>
+            <span>New Playlist</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Playlists Selector Tabs / Pills -->
+      <div class="playlist-tabs-container" id="playlist-tabs-container">
+        <!-- Dynamic playlist chips rendered here -->
+      </div>
+
+      <!-- Active Playlist Header & Controls -->
+      <div class="active-playlist-toolbar" id="active-playlist-toolbar" style="display: none;">
+        <div class="active-playlist-info">
+          <span class="material-symbols-rounded" style="color: var(--accent);">album</span>
+          <span class="active-playlist-name" id="active-playlist-name">Playlist Name</span>
+          <span class="badge badge-server" id="active-playlist-track-count">0 tracks</span>
+        </div>
+        <div class="active-playlist-actions">
+          <button class="btn btn-primary" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="playActivePlaylist(false)" title="Load and play playlist in sequential order">
+            <span class="material-symbols-rounded">play_arrow</span>
+            <span>Play Ordered</span>
+          </button>
+          <button class="btn btn-accent" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="playActivePlaylist(true)" title="Load and play playlist in shuffled order">
+            <span class="material-symbols-rounded">shuffle</span>
+            <span>Play Shuffled</span>
+          </button>
+          <button class="btn btn-secondary" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="queueActivePlaylist(false)" title="Append playlist to upcoming playback">
+            <span class="material-symbols-rounded">queue</span>
+            <span>Queue</span>
+          </button>
+          <button class="btn btn-danger" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="deleteActivePlaylist()" title="Delete this playlist">
+            <span class="material-symbols-rounded">delete</span>
+            <span>Delete</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Active Playlist Tracklist -->
+      <ul class="playback-list" id="playlist-tracks-container" style="max-height: 360px;">
+        <div class="playback-empty" id="playlist-empty-state">Select or create a playlist above.</div>
+      </ul>
+
+      <!-- Add Track to Active Playlist -->
+      <div class="quick-input-box" id="playlist-add-box" style="display: none;">
+        <input type="text" id="playlist-add-input" class="input-field" placeholder="Add song or YouTube URL to this playlist..." onkeydown="if(event.key==='Enter') addTrackToActivePlaylist()">
+        <button class="btn btn-primary" onclick="addTrackToActivePlaylist()">
+          <span class="material-symbols-rounded">add_circle</span>
+          <span>Add to Playlist</span>
+        </button>
+      </div>
+    </section>
   </div>
 
   <!-- Security Lock Screen Modal (Glassmorphic OTP Input) -->

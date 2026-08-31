@@ -24,6 +24,7 @@ from music_streamer.config import (
 from music_streamer.db import db
 from music_streamer.ipc import send_ipc_command
 from music_streamer.playback import playback_mgr
+from music_streamer.playlist import playlist_mgr
 from music_streamer.search import fetch_track_metadata, format_search_results, search_music
 from music_streamer.security import security
 
@@ -136,6 +137,35 @@ def build_playback_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("target", nargs="*", help="Arguments for subcommand (URL, query, index, etc.)")
     parser.add_argument("--json", action="store_true", help="Output list in JSON format")
+    return parser
+
+
+def build_playlist_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage persistent named playlists stored in SQLite")
+    parser.add_argument(
+        "command",
+        choices=[
+            "create",
+            "new",
+            "list",
+            "ls",
+            "show",
+            "view",
+            "add",
+            "remove",
+            "rm",
+            "del-track",
+            "delete",
+            "drop",
+            "play",
+            "queue",
+        ],
+        help="Subcommand",
+    )
+    parser.add_argument("playlist", nargs="?", help="Playlist name or ID")
+    parser.add_argument("target", nargs="*", help="Track URL, search query, or track index")
+    parser.add_argument("-s", "--shuffle", action="store_true", help="Play/Queue in shuffle mode")
+    parser.add_argument("-j", "--json", action="store_true", help="Output in JSON format")
     return parser
 
 
@@ -457,6 +487,140 @@ def handle_playback(args: argparse.Namespace) -> int:
         playback_mgr.clear_all()
         print("✓ Cleared entire playback list.")
         send_ipc_command({"action": "playback_clear"})
+        return 0
+
+    return 0
+
+
+def handle_playlist(args: argparse.Namespace) -> int:
+    cmd = args.command
+    pl_name = args.playlist
+    targets = args.target
+
+    if cmd in ["create", "new"]:
+        name = pl_name or (" ".join(targets) if targets else "")
+        if not name:
+            print("Usage: playlist.py create <NAME>", file=sys.stderr)
+            return 1
+        pl = playlist_mgr.create_playlist(name)
+        print(f"✓ Created playlist: {pl['name']}")
+        send_ipc_command({"action": "playlist_update"})
+        return 0
+
+    elif cmd in ["list", "ls"]:
+        pls = playlist_mgr.get_playlists()
+        if args.json:
+            print(json.dumps(pls, indent=2, ensure_ascii=False))
+            return 0
+
+        print("═" * 60)
+        print(f" 📚 PLAYLIST LIBRARY — Total: {len(pls)} Playlist(s)")
+        print("═" * 60)
+        if not pls:
+            print('  (No playlists found — create one with ./playlist.py create "<name>")')
+            print("═" * 60)
+            return 0
+
+        for idx, p in enumerate(pls, 1):
+            count = p.get("track_count", 0)
+            print(f"  {idx:2d}. 🎵 \033[1;36m{p['name']}\033[0m ({count} tracks)")
+        print("═" * 60)
+        return 0
+
+    elif cmd in ["show", "view"]:
+        if not pl_name:
+            print("Usage: playlist.py show <NAME>", file=sys.stderr)
+            return 1
+        pl = playlist_mgr.get_playlist(pl_name)
+        if not pl:
+            print(f"Error: playlist '{pl_name}' not found", file=sys.stderr)
+            return 1
+        if args.json:
+            print(json.dumps(pl, indent=2, ensure_ascii=False))
+            return 0
+
+        tracks = pl.get("tracks", [])
+        print("═" * 60)
+        print(f" 🎵 PLAYLIST: {pl['name']} — Total: {len(tracks)} Track(s)")
+        print("═" * 60)
+        if not tracks:
+            print('  (Playlist is empty — add tracks with ./playlist.py add "<playlist>" "<url|query>")')
+            print("═" * 60)
+            return 0
+
+        for idx, t in enumerate(tracks, 1):
+            print(f"  {idx:2d}. \033[1;32m{t['title']}\033[0m")
+            print(f"      {t['url']}")
+        print("═" * 60)
+        return 0
+
+    elif cmd == "add":
+        if not pl_name or not targets:
+            print("Usage: playlist.py add <NAME> <URL|query>", file=sys.stderr)
+            return 1
+        inp = " ".join(targets)
+        try:
+            print(f"Adding to playlist '{pl_name}': {inp}")
+            t = playlist_mgr.add_track(pl_name, inp)
+            print(f"✓ Added to '{pl_name}': {t['title']}")
+            send_ipc_command({"action": "playlist_update"})
+            return 0
+        except Exception as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+
+    elif cmd in ["remove", "rm", "del-track"]:
+        if not pl_name or not targets:
+            print("Usage: playlist.py remove <NAME> <INDEX|ID>", file=sys.stderr)
+            return 1
+        target_val = targets[0]
+        idx = int(target_val) - 1 if target_val.isdigit() else target_val
+        ok = playlist_mgr.remove_track(pl_name, idx)
+        if ok:
+            print(f"✓ Removed track from playlist '{pl_name}'")
+            send_ipc_command({"action": "playlist_update"})
+            return 0
+        else:
+            print(f"Error: track '{target_val}' not found in playlist '{pl_name}'", file=sys.stderr)
+            return 1
+
+    elif cmd in ["delete", "drop"]:
+        if not pl_name:
+            print("Usage: playlist.py delete <NAME>", file=sys.stderr)
+            return 1
+        ok = playlist_mgr.delete_playlist(pl_name)
+        if ok:
+            print(f"✓ Deleted playlist: {pl_name}")
+            send_ipc_command({"action": "playlist_update"})
+            return 0
+        else:
+            print(f"Error: playlist '{pl_name}' not found", file=sys.stderr)
+            return 1
+
+    elif cmd == "play":
+        if not pl_name:
+            print("Usage: playlist.py play <NAME> [--shuffle]", file=sys.stderr)
+            return 1
+        res = playlist_mgr.play_playlist(pl_name, shuffle=args.shuffle)
+        if not res.get("success"):
+            print(f"Error: {res.get('error')}", file=sys.stderr)
+            return 1
+
+        send_ipc_command({"action": "play"})
+        print(f"▶ Started playback of playlist '{res['playlist']}' ({res['count']} tracks, Mode: {res['mode'].upper()})")
+        return 0
+
+    elif cmd == "queue":
+        if not pl_name:
+            print("Usage: playlist.py queue <NAME> [--shuffle]", file=sys.stderr)
+            return 1
+        res = playlist_mgr.queue_playlist(pl_name, shuffle=args.shuffle)
+        if not res.get("success"):
+            print(f"Error: {res.get('error')}", file=sys.stderr)
+            return 1
+
+        send_ipc_command({"action": "playback_update"})
+        print(f"✓ Queued {res['added_count']} tracks from playlist '{res['playlist']}'")
         return 0
 
     return 0
@@ -912,6 +1076,7 @@ def main():
     subparsers.add_parser("play", parents=[build_play_parser()], add_help=False)
     subparsers.add_parser("search", parents=[build_search_parser()], add_help=False)
     subparsers.add_parser("playback", parents=[build_playback_parser()], add_help=False)
+    subparsers.add_parser("playlist", parents=[build_playlist_parser()], add_help=False)
     subparsers.add_parser("pause", parents=[build_stop_parser()], add_help=False)
     subparsers.add_parser("resume", parents=[build_stop_parser()], add_help=False)
     subparsers.add_parser("volume", parents=[build_volume_parser()], add_help=False)
@@ -930,6 +1095,7 @@ def main():
         "play": handle_play,
         "search": handle_search,
         "playback": handle_playback,
+        "playlist": handle_playlist,
         "pause": handle_pause,
         "resume": handle_resume,
         "volume": handle_volume,

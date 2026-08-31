@@ -88,6 +88,36 @@ class DatabaseManager:
             )
             cur.execute("CREATE INDEX IF NOT EXISTS idx_otp_expires ON otp_sessions(expires_at);")
 
+            # Playlists Schema
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS playlists (
+                    id TEXT PRIMARY KEY,
+                    name TEXT UNIQUE NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL
+                );
+                """
+            )
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_playlist_name ON playlists(name);")
+
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS playlist_tracks (
+                    id TEXT PRIMARY KEY,
+                    playlist_id TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    thumbnail TEXT,
+                    sort_order INTEGER NOT NULL,
+                    added_at INTEGER NOT NULL,
+                    FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
+                );
+                """
+            )
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_playlist_id ON playlist_tracks(playlist_id);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_playlist_order ON playlist_tracks(playlist_id, sort_order);")
+
             # Set default settings if absent
             defaults = {
                 "state": "stopped",
@@ -367,6 +397,167 @@ class DatabaseManager:
             rows = cur.fetchall()
             cur.close()
             return {r["token"]: dict(r) for r in rows}
+
+    # -------------------------------------------------------------------------
+    # Playlists Storage
+    # -------------------------------------------------------------------------
+
+    def create_playlist(self, name: str) -> Dict[str, Any]:
+        """Creates a new playlist or returns existing playlist if name already exists."""
+        clean_name = name.strip()
+        if not clean_name:
+            raise ValueError("Playlist name cannot be empty")
+
+        with self.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM playlists WHERE name = ? COLLATE NOCASE;", (clean_name,))
+            existing = cur.fetchone()
+            if existing:
+                cur.close()
+                return dict(existing)
+
+            import uuid
+
+            pid = str(uuid.uuid4())
+            now = int(time.time())
+            cur.execute(
+                """
+                INSERT INTO playlists (id, name, created_at, updated_at)
+                VALUES (?, ?, ?, ?);
+                """,
+                (pid, clean_name, now, now),
+            )
+            cur.close()
+            return {"id": pid, "name": clean_name, "created_at": now, "updated_at": now, "track_count": 0}
+
+    def get_playlists(self) -> List[Dict[str, Any]]:
+        """Returns all playlists with track counts."""
+        with self.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT p.*, COUNT(pt.id) AS track_count
+                FROM playlists p
+                LEFT JOIN playlist_tracks pt ON p.id = pt.playlist_id
+                GROUP BY p.id
+                ORDER BY p.updated_at DESC, p.created_at ASC;
+                """
+            )
+            rows = cur.fetchall()
+            cur.close()
+            return [dict(r) for r in rows]
+
+    def get_playlist(self, name_or_id: str) -> Optional[Dict[str, Any]]:
+        """Gets playlist details and its list of tracks by name or ID."""
+        if not name_or_id:
+            return None
+        with self.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT * FROM playlists WHERE id = ? OR name = ? COLLATE NOCASE;",
+                (str(name_or_id), str(name_or_id)),
+            )
+            row = cur.fetchone()
+            if not row:
+                cur.close()
+                return None
+            pl = dict(row)
+            cur.execute(
+                "SELECT * FROM playlist_tracks WHERE playlist_id = ? ORDER BY sort_order ASC, added_at ASC;",
+                (pl["id"],),
+            )
+            tracks = [dict(t) for t in cur.fetchall()]
+            cur.close()
+            pl["tracks"] = tracks
+            pl["track_count"] = len(tracks)
+            return pl
+
+    def delete_playlist(self, name_or_id: str) -> bool:
+        """Deletes a playlist and its tracks."""
+        pl = self.get_playlist(name_or_id)
+        if not pl:
+            return False
+        with self.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM playlist_tracks WHERE playlist_id = ?;", (pl["id"],))
+            cur.execute("DELETE FROM playlists WHERE id = ?;", (pl["id"],))
+            deleted = cur.rowcount > 0
+            cur.close()
+            return deleted
+
+    def add_track_to_playlist(
+        self,
+        name_or_id: str,
+        url: str,
+        title: str,
+        thumbnail: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Adds a track to a playlist."""
+        pl = self.get_playlist(name_or_id)
+        if not pl:
+            pl = self.create_playlist(name_or_id)
+
+        import uuid
+
+        tid = str(uuid.uuid4())
+        now = int(time.time())
+        with self.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM playlist_tracks WHERE playlist_id = ?;",
+                (pl["id"],),
+            )
+            next_order = cur.fetchone()[0]
+            cur.execute(
+                """
+                INSERT INTO playlist_tracks (id, playlist_id, url, title, thumbnail, sort_order, added_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?);
+                """,
+                (tid, pl["id"], url, title, thumbnail, next_order, now),
+            )
+            cur.execute("UPDATE playlists SET updated_at = ? WHERE id = ?;", (now, pl["id"]))
+            cur.close()
+
+        return {
+            "id": tid,
+            "playlist_id": pl["id"],
+            "url": url,
+            "title": title,
+            "thumbnail": thumbnail,
+            "sort_order": next_order,
+            "added_at": now,
+        }
+
+    def remove_track_from_playlist(self, name_or_id: str, track_id_or_index: Any) -> bool:
+        """Removes a track from a playlist by track ID or 0-based index."""
+        pl = self.get_playlist(name_or_id)
+        if not pl:
+            return False
+
+        target_id = None
+        if isinstance(track_id_or_index, int) or (isinstance(track_id_or_index, str) and track_id_or_index.isdigit()):
+            idx = int(track_id_or_index)
+            tracks = pl.get("tracks", [])
+            if 0 <= idx < len(tracks):
+                target_id = tracks[idx]["id"]
+        else:
+            target_id = str(track_id_or_index)
+
+        if not target_id:
+            return False
+
+        with self.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "DELETE FROM playlist_tracks WHERE playlist_id = ? AND id = ?;",
+                (pl["id"], target_id),
+            )
+            deleted = cur.rowcount > 0
+            if deleted:
+                now = int(time.time())
+                cur.execute("UPDATE playlists SET updated_at = ? WHERE id = ?;", (now, pl["id"]))
+            cur.close()
+            return deleted
 
 
 # Global singleton instance
