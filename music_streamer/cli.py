@@ -147,6 +147,8 @@ def build_playlist_parser() -> argparse.ArgumentParser:
         choices=[
             "create",
             "new",
+            "rename",
+            "mv",
             "list",
             "ls",
             "show",
@@ -498,12 +500,24 @@ def handle_playlist(args: argparse.Namespace) -> int:
     targets = args.target
 
     if cmd in ["create", "new"]:
-        name = pl_name or (" ".join(targets) if targets else "")
-        if not name:
+        if not pl_name:
             print("Usage: playlist.py create <NAME>", file=sys.stderr)
             return 1
-        pl = playlist_mgr.create_playlist(name)
+        pl = playlist_mgr.create_playlist(pl_name)
         print(f"✓ Created playlist: {pl['name']}")
+        send_ipc_command({"action": "playlist_update"})
+        return 0
+
+    elif cmd in ["rename", "mv"]:
+        if not pl_name or not args.target:
+            print("Usage: playlist.py rename <OLD_NAME> <NEW_NAME>", file=sys.stderr)
+            return 1
+        new_name = " ".join(args.target)
+        res = playlist_mgr.rename_playlist(pl_name, new_name)
+        if not res.get("success"):
+            print(f"Error: {res.get('error')}", file=sys.stderr)
+            return 1
+        print(f"✓ Renamed playlist '{pl_name}' to '{new_name}'")
         send_ipc_command({"action": "playlist_update"})
         return 0
 

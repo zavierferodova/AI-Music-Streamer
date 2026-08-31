@@ -612,6 +612,22 @@ function openNewPlaylistPrompt() {
   }
 }
 
+function renameActivePlaylist() {
+  if (!selectedPlaylistName) return;
+  const current = selectedPlaylistName;
+  const newName = prompt(`Rename playlist "${current}" to:`, current);
+  if (newName && newName.trim() && newName.trim() !== current) {
+    const clean = newName.trim();
+    sendCommand({ action: 'playlist_rename', playlist: current, new_name: clean });
+    selectedPlaylistName = clean;
+    showToast(`Renamed playlist to "${clean}"`, 'edit');
+    setTimeout(() => {
+      updateStatus();
+      loadActivePlaylist(clean);
+    }, 200);
+  }
+}
+
 function deleteActivePlaylist() {
   if (!selectedPlaylistName) return;
   if (confirm(`Are you sure you want to delete playlist "${selectedPlaylistName}"?`)) {

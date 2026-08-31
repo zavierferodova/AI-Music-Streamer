@@ -165,6 +165,33 @@ class TestPlaylistManager(unittest.TestCase):
         self.assertEqual(pb_state["now_playing"]["title"], "Initial Song")
         self.assertEqual(pb_state["queued_count"], 2)
 
+    def test_rename_playlist(self):
+        """Verify renaming a playlist updates its name while preserving all tracks."""
+        self.playlist_mgr.create_playlist("Old Name")
+        self.playlist_mgr.add_track("Old Name", "https://youtube.com/watch?v=1", "Song 1", auto_fetch=False)
+
+        res = self.playlist_mgr.rename_playlist("Old Name", "New Fancy Name")
+        self.assertTrue(res["success"])
+        self.assertEqual(res["playlist"]["name"], "New Fancy Name")
+
+        # Old name no longer exists
+        self.assertIsNone(self.playlist_mgr.get_playlist("Old Name"))
+
+        # New name has all tracks
+        new_pl = self.playlist_mgr.get_playlist("New Fancy Name")
+        self.assertIsNotNone(new_pl)
+        self.assertEqual(new_pl["track_count"], 1)
+        self.assertEqual(new_pl["tracks"][0]["title"], "Song 1")
+
+    def test_rename_playlist_duplicate_prevented(self):
+        """Verify renaming to an existing playlist name fails cleanly."""
+        self.playlist_mgr.create_playlist("List 1")
+        self.playlist_mgr.create_playlist("List 2")
+
+        res = self.playlist_mgr.rename_playlist("List 1", "List 2")
+        self.assertFalse(res["success"])
+        self.assertIn("already exists", res["error"])
+
 
 if __name__ == "__main__":
     unittest.main()

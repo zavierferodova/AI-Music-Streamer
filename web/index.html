@@ -323,7 +323,12 @@
               </div>
               <div class="active-playlist-meta">
                 <span class="active-playlist-tag">PLAYLIST</span>
-                <h3 class="active-playlist-name" id="active-playlist-name">Playlist Name</h3>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <h3 class="active-playlist-name" id="active-playlist-name">Playlist Name</h3>
+                  <button class="btn-icon-subtle" title="Rename Playlist" onclick="renameActivePlaylist()" style="background: none; border: none; color: var(--text-dim); cursor: pointer; display: flex; align-items: center; padding: 2px 4px; border-radius: 4px;">
+                    <span class="material-symbols-rounded" style="font-size: 18px;">edit</span>
+                  </button>
+                </div>
                 <div class="active-playlist-subtext">
                   <span id="active-playlist-track-count">0 tracks</span>
                   <span class="dot-sep">•</span>
@@ -344,6 +349,10 @@
               <button class="btn btn-secondary" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="queueActivePlaylist(false)" title="Append playlist to upcoming playback">
                 <span class="material-symbols-rounded">queue</span>
                 <span>Queue</span>
+              </button>
+              <button class="btn btn-secondary" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="renameActivePlaylist()" title="Rename this playlist">
+                <span class="material-symbols-rounded">edit</span>
+                <span>Rename</span>
               </button>
               <button class="btn btn-danger" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="deleteActivePlaylist()" title="Delete this playlist">
                 <span class="material-symbols-rounded">delete</span>

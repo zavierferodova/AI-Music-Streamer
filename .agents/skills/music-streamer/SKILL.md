@@ -137,6 +137,7 @@ When a user asks to play a search query, search via `search.py --json` and prese
 
 # Persistent Named Playlists (Permanent collections stored in SQLite)
 ~/music-streamer/playlist.py create "Favorites"       # Create a new playlist
+~/music-streamer/playlist.py rename "Favorites" "Top Favs" # Rename a playlist
 ~/music-streamer/playlist.py list [--json]            # List all playlists with track counts
 ~/music-streamer/playlist.py show "Favorites" [--json]# View tracks inside playlist
 ~/music-streamer/playlist.py add "Favorites" "<URL>"  # Add track (auto metadata resolution)

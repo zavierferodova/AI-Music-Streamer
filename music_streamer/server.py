@@ -514,6 +514,11 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             name = payload.get("name")
             if name:
                 self.server.playlist_mgr.create_playlist(name)
+        elif action == "playlist_rename":
+            target = payload.get("playlist") or payload.get("name") or payload.get("id")
+            new_name = payload.get("new_name")
+            if target and new_name:
+                self.server.playlist_mgr.rename_playlist(target, new_name)
         elif action == "playlist_delete":
             target = payload.get("name") or payload.get("id") or payload.get("playlist")
             if target:
@@ -690,6 +695,15 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             name = payload.get("name") or "New Playlist"
             pl = self.server.playlist_mgr.create_playlist(name)
             self._send_json({"status": "ok", "playlist": pl})
+
+        elif path == "/api/playlist/rename":
+            target = payload.get("playlist") or payload.get("name") or payload.get("id")
+            new_name = payload.get("new_name")
+            if not target or not new_name:
+                self._send_json({"status": "error", "error": "Missing target playlist or new_name"})
+            else:
+                res = self.server.playlist_mgr.rename_playlist(target, new_name)
+                self._send_json({"status": "ok" if res.get("success") else "error", **res})
 
         elif path == "/api/playlist/delete":
             target = payload.get("name") or payload.get("id") or payload.get("playlist")

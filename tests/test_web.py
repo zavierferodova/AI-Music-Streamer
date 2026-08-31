@@ -405,13 +405,24 @@ class TestWebServer(unittest.TestCase):
         self.assertEqual(data_single["playlist"]["name"], "Chill Lounge")
         self.assertEqual(data_single["playlist"]["track_count"], 1)
 
-        # 5. Play playlist
-        conn.request("POST", "/api/playlist/play", body=json.dumps({"playlist": "Chill Lounge"}), headers=auth_header)
+        # 5. Rename playlist
+        conn.request(
+            "POST",
+            "/api/playlist/rename",
+            body=json.dumps({"playlist": "Chill Lounge", "new_name": "Ultra Chill"}),
+            headers=auth_header,
+        )
+        resp_rename = conn.getresponse()
+        self.assertEqual(resp_rename.status, 200)
+        self.assertEqual(json.loads(resp_rename.read().decode("utf-8"))["playlist"]["name"], "Ultra Chill")
+
+        # 6. Play playlist with new name
+        conn.request("POST", "/api/playlist/play", body=json.dumps({"playlist": "Ultra Chill"}), headers=auth_header)
         resp_play = conn.getresponse()
         self.assertEqual(resp_play.status, 200)
         self.assertTrue(json.loads(resp_play.read().decode("utf-8"))["success"])
 
-        # 6. Delete playlist
+        # 7. Delete playlist
         conn.request("POST", "/api/playlist/delete", body=json.dumps({"name": "Workout Mix"}), headers=auth_header)
         resp_del = conn.getresponse()
         self.assertEqual(resp_del.status, 200)

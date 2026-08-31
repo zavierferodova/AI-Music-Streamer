@@ -472,6 +472,36 @@ class DatabaseManager:
             pl["track_count"] = len(tracks)
             return pl
 
+    def rename_playlist(self, name_or_id: str, new_name: str) -> Optional[Dict[str, Any]]:
+        """Renames an existing playlist to a new name."""
+        clean_new = new_name.strip()
+        if not clean_new:
+            raise ValueError("New playlist name cannot be empty")
+
+        pl = self.get_playlist(name_or_id)
+        if not pl:
+            return None
+
+        with self.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id FROM playlists WHERE name = ? COLLATE NOCASE AND id != ?;",
+                (clean_new, pl["id"]),
+            )
+            dup = cur.fetchone()
+            if dup:
+                cur.close()
+                raise ValueError(f"Another playlist named '{clean_new}' already exists")
+
+            now = int(time.time())
+            cur.execute(
+                "UPDATE playlists SET name = ?, updated_at = ? WHERE id = ?;",
+                (clean_new, now, pl["id"]),
+            )
+            cur.close()
+
+        return self.get_playlist(pl["id"])
+
     def delete_playlist(self, name_or_id: str) -> bool:
         """Deletes a playlist and its tracks."""
         pl = self.get_playlist(name_or_id)

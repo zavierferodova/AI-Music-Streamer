@@ -33,6 +33,16 @@ class PlaylistManager:
         """Gets a playlist with its full tracklist by name or ID."""
         return self.db.get_playlist(name_or_id)
 
+    def rename_playlist(self, name_or_id: str, new_name: str) -> Dict[str, Any]:
+        """Renames a playlist to a new name."""
+        try:
+            pl = self.db.rename_playlist(name_or_id, new_name)
+            if not pl:
+                return {"success": False, "error": f"Playlist '{name_or_id}' not found"}
+            return {"success": True, "playlist": pl}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     def delete_playlist(self, name_or_id: str) -> bool:
         """Deletes a playlist and all its tracks from SQLite."""
         return self.db.delete_playlist(name_or_id)
