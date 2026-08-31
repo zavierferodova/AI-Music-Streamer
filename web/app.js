@@ -702,9 +702,12 @@ function applyStatusUpdate(data) {
     }
   }
 
-  // Uptime & Listeners
-  document.getElementById('uptime-badge').innerText = formatUptime(data.uptime_seconds || 0);
-  document.getElementById('client-count-badge').innerText = data.clients_connected || 0;
+  // Listeners count
+  const clientBadge = document.getElementById('client-count-badge');
+  if (clientBadge) clientBadge.innerText = data.clients_connected || 0;
+
+  const uptimeBadge = document.getElementById('uptime-badge');
+  if (uptimeBadge) uptimeBadge.innerText = formatUptime(data.uptime_seconds || 0);
 
   // Security Badge
   if (data.security) {
