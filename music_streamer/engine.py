@@ -108,6 +108,9 @@ class AudioEngine:
         self.volume = self.db.get_int_setting("volume", default=80)
         self.loop = self.db.get_setting("loop", default="yes")
         self.track_start_time: Optional[float] = None
+        self.last_error: Optional[dict] = None
+        self.is_buffering: bool = False
+        self.chunks_played: int = 0
 
         self.lock = threading.Lock()
         self.running = True
@@ -311,6 +314,8 @@ class AudioEngine:
             f"| ffmpeg -hide_banner -loglevel error -fflags +genpts -i pipe:0 -vn -f s16le -ar {SAMPLE_RATE} -ac {CHANNELS} pipe:1 2>>'{log_path}'"
         )
         self.track_start_time = time.time()
+        self.is_buffering = True
+        self.chunks_played = 0
         proc = subprocess.Popen(
             ["bash", "-c", shell_cmd],
             stdout=subprocess.PIPE,
@@ -321,6 +326,7 @@ class AudioEngine:
         return proc
 
     def _stop_decoder(self):
+        self.is_buffering = False
         if self.decoder_proc:
             try:
                 pgid = os.getpgid(self.decoder_proc.pid)
@@ -336,6 +342,7 @@ class AudioEngine:
             self.decoder_proc = None
 
     def _pause_decoder(self):
+        self.is_buffering = False
         if self.decoder_proc:
             try:
                 pgid = os.getpgid(self.decoder_proc.pid)
@@ -360,6 +367,9 @@ class AudioEngine:
                 break
 
             action = cmd.get("action")
+            if action in ["play", "interrupt", "playback_play", "queue_play", "skip", "next"]:
+                self.last_error = None
+
             if action == "play":
                 url = cmd.get("url")
                 title = cmd.get("title", "")
@@ -400,6 +410,7 @@ class AudioEngine:
                     self.decoder_proc = self._start_decoder(self.current_url)
 
             elif action == "pause":
+                self.is_buffering = False
                 if self.state == "playing":
                     self.state = "paused"
                     self._pause_decoder()
@@ -408,6 +419,7 @@ class AudioEngine:
                     print("[AudioEngine] Paused")
 
             elif action == "resume":
+                self.is_buffering = False
                 if self.state == "paused":
                     self.state = "playing"
                     self._resume_decoder()
@@ -416,6 +428,7 @@ class AudioEngine:
 
             elif action == "stop":
                 self.state = "stopped"
+                self.is_buffering = False
                 self._stop_decoder()
                 self._close_alsa_sink()
                 self.playback_mgr.mark_current_finished()
@@ -513,6 +526,10 @@ class AudioEngine:
                 except Exception:
                     pass
 
+            elif action in ["dismiss_error", "clear_error"]:
+                self.last_error = None
+                self._sync_runtime_state()
+
     def _run_master_audio_loop(self):
         """
         Master real-time tick loop (20 iterations/sec @ 50ms intervals).
@@ -529,6 +546,8 @@ class AudioEngine:
                 raw_pcm = self.decoder_proc.stdout.read(CHUNK_BYTES)
 
                 if raw_pcm:
+                    self.is_buffering = False
+                    self.chunks_played += 1
                     if len(raw_pcm) == CHUNK_BYTES:
                         # Feed broadcast encoder (stream.mp3)
                         if self.encoder_proc and self.encoder_proc.stdin:
@@ -551,8 +570,39 @@ class AudioEngine:
                             next_tick = now
                         continue
                 else:
-                    # Decoder reached EOF / finished track
-                    print(f"[AudioEngine] Track finished: {self.current_title}")
+                    # Decoder reached EOF / finished track or failed
+                    is_error = False
+                    duration = time.time() - (self.track_start_time or time.time())
+                    if self.chunks_played < 5 or duration < 2.5:
+                        is_error = True
+
+                    failed_title = self.current_title
+                    failed_url = self.current_url
+
+                    if is_error and failed_url:
+                        err_msg = f"Unable to play '{failed_title or failed_url}'. Audio stream could not be loaded."
+                        if PLAYER_LOG_FILE.exists():
+                            try:
+                                log_lines = PLAYER_LOG_FILE.read_text(encoding="utf-8", errors="ignore").splitlines()[-10:]
+                                for line in reversed(log_lines):
+                                    c = line.strip()
+                                    if any(k in c.lower() for k in ["error:", "http error", "unavailable", "private video", "blocked", "sign in"]):
+                                        err_msg = f"Playback Error: {c}"
+                                        break
+                            except Exception:
+                                pass
+
+                        self.last_error = {
+                            "message": err_msg,
+                            "title": failed_title or failed_url,
+                            "url": failed_url,
+                            "timestamp": time.time(),
+                        }
+                        print(f"[AudioEngine] Playback failed: {err_msg}", file=sys.stderr)
+                    else:
+                        print(f"[AudioEngine] Track finished: {self.current_title}")
+
+                    self.is_buffering = False
                     self._stop_decoder()
 
                     loop_val = str(self.db.get_setting("loop", default=self.loop)).lower()

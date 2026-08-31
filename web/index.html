@@ -16,7 +16,22 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+  <!-- Top Global Loading Bar -->
+  <div class="top-progress-bar" id="top-progress-bar"></div>
+
   <div class="container">
+    <!-- WebSocket / Server Disconnected Banner -->
+    <div class="connection-banner" id="connection-banner" style="display: none;">
+      <div class="connection-banner-inner">
+        <span class="material-symbols-rounded spinner-icon">sync</span>
+        <span id="connection-banner-text">Connecting to Stream Server...</span>
+      </div>
+      <button class="btn-banner-action" id="btn-reconnect-now" onclick="retryServerConnection()">
+        <span class="material-symbols-rounded">refresh</span>
+        <span>Retry</span>
+      </button>
+    </div>
+
     <!-- Top Navigation Bar -->
     <header class="top-bar">
       <div class="brand">
@@ -33,7 +48,7 @@
           <span class="material-symbols-rounded">lock</span>
           <span id="security-status-text">OTP Protected</span>
         </div>
-        <div class="badge badge-live">
+        <div class="badge badge-live" id="badge-live-container">
           <div class="live-dot" id="live-dot-indicator"></div>
           <span id="live-indicator">CONNECTING (WS)...</span>
         </div>
@@ -49,26 +64,58 @@
       <div class="search-bar-inner">
         <span class="material-symbols-rounded search-bar-icon">search</span>
         <input type="text" id="universal-search-input" class="search-bar-input" placeholder="Search song in playlists, queue, or online YouTube..." onkeydown="if(event.key==='Enter') executeUniversalSearch()">
+        <div class="search-input-spinner" id="search-input-spinner" style="display: none;"></div>
         <button class="btn btn-primary" id="btn-search-exec" onclick="executeUniversalSearch()">
-          <span class="material-symbols-rounded">search</span>
-          <span>Search</span>
+          <span class="material-symbols-rounded" id="btn-search-icon">search</span>
+          <span id="btn-search-text">Search</span>
         </button>
       </div>
     </section>
 
     <!-- Hero Now Playing Card with Thumbnail -->
-    <main class="hero-card">
+    <main class="hero-card" id="hero-now-playing-card">
+      <!-- Playback Error Alert Banner -->
+      <div class="playback-error-banner" id="playback-error-banner" style="display: none;">
+        <div class="playback-error-icon">
+          <span class="material-symbols-rounded">error_outline</span>
+        </div>
+        <div class="playback-error-content">
+          <div class="playback-error-title" id="playback-error-title">Playback Error</div>
+          <div class="playback-error-msg" id="playback-error-msg">The music stream could not be loaded or played.</div>
+        </div>
+        <div class="playback-error-actions">
+          <button class="btn-error-action" id="btn-error-retry" onclick="retryCurrentTrack()">
+            <span class="material-symbols-rounded">refresh</span>
+            <span>Retry</span>
+          </button>
+          <button class="btn-error-action" id="btn-error-skip" onclick="skipTrack()">
+            <span class="material-symbols-rounded">skip_next</span>
+            <span>Skip</span>
+          </button>
+          <button class="btn-error-close" onclick="dismissPlaybackError()" title="Dismiss">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </div>
+      </div>
+
       <div class="now-playing-header">
         <div class="section-label">
           <span class="material-symbols-rounded">equalizer</span>
           <span>NOW PLAYING</span>
         </div>
-        <div class="visualizer active" id="visualizer">
-          <div class="v-bar"></div>
-          <div class="v-bar"></div>
-          <div class="v-bar"></div>
-          <div class="v-bar"></div>
-          <div class="v-bar"></div>
+        <div class="header-status-right">
+          <!-- Buffering / Loading Badge -->
+          <div class="buffering-badge" id="buffering-badge" style="display: none;">
+            <div class="spinner-dot"></div>
+            <span id="buffering-text">Starting audio...</span>
+          </div>
+          <div class="visualizer active" id="visualizer">
+            <div class="v-bar"></div>
+            <div class="v-bar"></div>
+            <div class="v-bar"></div>
+            <div class="v-bar"></div>
+            <div class="v-bar"></div>
+          </div>
         </div>
       </div>
 
@@ -78,6 +125,10 @@
           <img id="now-playing-thumb" class="hero-artwork-img" src="{{TRACK_THUMBNAIL}}" alt="Track Thumbnail" onerror="this.style.display='none'; var f=document.getElementById('now-playing-thumb-fallback'); if(f) f.style.display='flex';">
           <div id="now-playing-thumb-fallback" class="hero-artwork-fallback" style="display: none;">
             <span class="material-symbols-rounded">music_note</span>
+          </div>
+          <!-- Artwork Buffering Overlay -->
+          <div class="hero-artwork-buffering" id="artwork-buffering-overlay" style="display: none;">
+            <div class="loading-ring"></div>
           </div>
         </div>
 
@@ -101,8 +152,8 @@
           <span class="material-symbols-rounded" id="play-pause-icon">pause</span>
           <span id="play-pause-text">Pause</span>
         </button>
-        <button class="btn btn-secondary" onclick="skipTrack()">
-          <span class="material-symbols-rounded">skip_next</span>
+        <button class="btn btn-secondary" id="btn-skip-track" onclick="skipTrack()">
+          <span class="material-symbols-rounded" id="skip-track-icon">skip_next</span>
           <span>Skip Next</span>
         </button>
         <button class="btn btn-secondary" id="btn-loop-toggle" onclick="toggleLoop()">
@@ -113,7 +164,7 @@
           <span class="material-symbols-rounded" id="mode-icon">volume_off</span>
           <span>Mode: <strong id="mode-state-text">SILENT</strong></span>
         </button>
-        <button class="btn btn-danger" onclick="stopMusic()">
+        <button class="btn btn-danger" id="btn-stop-music" onclick="stopMusic()">
           <span class="material-symbols-rounded">stop</span>
           <span>Stop</span>
         </button>
@@ -222,10 +273,12 @@
       <div class="stream-info">
         <button class="audio-btn" id="stream-audio-btn" aria-label="Toggle Live Stream Audio" onclick="toggleStreamAudio()">
           <span class="material-symbols-rounded" id="stream-audio-icon">play_arrow</span>
+          <div class="audio-btn-spinner" id="stream-audio-spinner" style="display: none;"></div>
         </button>
         <div>
           <div style="font-weight: 700; font-size: 1rem;">Listen Live Stream</div>
           <div style="font-size: 0.82rem; color: var(--text-muted);" id="stream-audio-status">Continuous MP3 Broadcast (24/7)</div>
+          <div class="stream-error-text" id="stream-audio-error" style="display: none;"></div>
         </div>
       </div>
       <div class="stream-actions">
@@ -254,12 +307,12 @@
             <span class="material-symbols-rounded" id="playback-mode-btn-icon">format_list_numbered</span>
             <span id="playback-mode-btn-text">Ordered</span>
           </button>
-          <button class="btn btn-secondary" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="resetPlaybackHistory()" title="Reset played tracks for fresh replay">
-            <span class="material-symbols-rounded">restart_alt</span>
+          <button class="btn btn-secondary" id="btn-reset-history" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="resetPlaybackHistory()" title="Reset played tracks for fresh replay">
+            <span class="material-symbols-rounded" id="reset-history-icon">restart_alt</span>
             <span>Replay All</span>
           </button>
-          <button class="btn btn-secondary" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="clearPlaybackList()">
-            <span class="material-symbols-rounded">delete_sweep</span>
+          <button class="btn btn-secondary" id="btn-clear-playback" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="clearPlaybackList()">
+            <span class="material-symbols-rounded" id="clear-playback-icon">delete_sweep</span>
             <span>Clear List</span>
           </button>
         </div>
@@ -279,13 +332,13 @@
       <!-- Quick Add / Interrupt Play Input -->
       <div class="quick-input-box">
         <input type="text" id="quick-url-input" class="input-field" placeholder="Paste YouTube URL or song name..." onkeydown="if(event.key==='Enter') quickAddPlayback()">
-        <button class="btn btn-primary" onclick="quickAddPlayback()">
-          <span class="material-symbols-rounded">playlist_add</span>
-          <span>Add to List</span>
+        <button class="btn btn-primary" id="btn-quick-add" onclick="quickAddPlayback()">
+          <span class="material-symbols-rounded" id="quick-add-icon">playlist_add</span>
+          <span id="quick-add-text">Add to List</span>
         </button>
-        <button class="btn btn-accent" onclick="quickInterruptPlay()">
-          <span class="material-symbols-rounded">bolt</span>
-          <span>Play Now</span>
+        <button class="btn btn-accent" id="btn-quick-interrupt" onclick="quickInterruptPlay()">
+          <span class="material-symbols-rounded" id="quick-interrupt-icon">bolt</span>
+          <span id="quick-interrupt-text">Play Now</span>
         </button>
       </div>
     </section>
@@ -299,8 +352,8 @@
           <span class="badge badge-listeners" id="playlists-total-badge">0</span>
         </div>
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-          <button class="btn btn-primary" style="padding: 8px 16px; font-size: 0.85rem; min-height: 38px;" onclick="openNewPlaylistPrompt()">
-            <span class="material-symbols-rounded">add</span>
+          <button class="btn btn-primary" id="btn-new-playlist" style="padding: 8px 16px; font-size: 0.85rem; min-height: 38px;" onclick="openNewPlaylistPrompt()">
+            <span class="material-symbols-rounded" id="new-playlist-icon">add</span>
             <span>New Playlist</span>
           </button>
         </div>
@@ -346,15 +399,15 @@
             </div>
 
             <div class="active-playlist-actions">
-              <button class="btn btn-primary" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="playActivePlaylist(false)" title="Load and play playlist in sequential order">
+              <button class="btn btn-primary" id="btn-pl-play-ordered" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="playActivePlaylist(false)" title="Load and play playlist in sequential order">
                 <span class="material-symbols-rounded">play_arrow</span>
                 <span>Play Ordered</span>
               </button>
-              <button class="btn btn-accent" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="playActivePlaylist(true)" title="Load and play playlist in shuffled order">
+              <button class="btn btn-accent" id="btn-pl-play-shuffled" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="playActivePlaylist(true)" title="Load and play playlist in shuffled order">
                 <span class="material-symbols-rounded">shuffle</span>
                 <span>Play Shuffled</span>
               </button>
-              <button class="btn btn-secondary" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="queueActivePlaylist(false)" title="Append playlist to upcoming playback">
+              <button class="btn btn-secondary" id="btn-pl-queue" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="queueActivePlaylist(false)" title="Append playlist to upcoming playback">
                 <span class="material-symbols-rounded">queue</span>
                 <span>Queue</span>
               </button>
@@ -362,7 +415,7 @@
                 <span class="material-symbols-rounded">edit</span>
                 <span>Rename</span>
               </button>
-              <button class="btn btn-danger" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="deleteActivePlaylist()" title="Delete this playlist">
+              <button class="btn btn-danger" id="btn-pl-delete" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="deleteActivePlaylist()" title="Delete this playlist">
                 <span class="material-symbols-rounded">delete</span>
                 <span>Delete</span>
               </button>
@@ -377,9 +430,9 @@
           <!-- Add Track to Active Playlist -->
           <div class="quick-input-box" id="playlist-add-box" style="display: none; margin-top: 14px;">
             <input type="text" id="playlist-add-input" class="input-field" placeholder="Add song or YouTube URL to this playlist..." onkeydown="if(event.key==='Enter') addTrackToActivePlaylist()">
-            <button class="btn btn-primary" onclick="addTrackToActivePlaylist()">
-              <span class="material-symbols-rounded">add_circle</span>
-              <span>Add to Playlist</span>
+            <button class="btn btn-primary" id="btn-pl-add-track" onclick="addTrackToActivePlaylist()">
+              <span class="material-symbols-rounded" id="pl-add-icon">add_circle</span>
+              <span id="pl-add-text">Add to Playlist</span>
             </button>
           </div>
         </div>
@@ -402,6 +455,13 @@
       </div>
 
       <div class="search-modal-body">
+        <!-- Search Error Alert Box -->
+        <div class="search-error-card" id="search-error-card" style="display: none;">
+          <span class="material-symbols-rounded" style="font-size: 24px; color: var(--rose);">error_outline</span>
+          <div class="search-error-msg" id="search-error-msg">Search failed. Please check your network connection.</div>
+          <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.78rem;" onclick="executeUniversalSearch()">Retry</button>
+        </div>
+
         <!-- 1. Local Library Section -->
         <div class="search-section" id="search-local-section">
           <div class="search-section-header">
@@ -413,7 +473,7 @@
             <span class="search-section-tag">Instant Local Play</span>
           </div>
           <ul class="search-results-list" id="search-local-list">
-            <!-- Dynamic local results -->
+            <!-- Dynamic local results or skeleton -->
           </ul>
         </div>
 
@@ -428,7 +488,7 @@
             <span class="search-section-tag">Online Stream</span>
           </div>
           <ul class="search-results-list" id="search-web-list">
-            <!-- Dynamic web results -->
+            <!-- Dynamic web results or skeleton -->
           </ul>
         </div>
       </div>
@@ -455,16 +515,18 @@
 
       <div class="lock-error" id="lock-error-msg"></div>
 
-      <button class="btn btn-primary" style="width: 100%;" onclick="submitOTP()">
-        <span class="material-symbols-rounded">key</span>
-        <span>Unlock Control Panel</span>
+      <button class="btn btn-primary" id="btn-unlock-otp" style="width: 100%;" onclick="submitOTP()">
+        <span class="material-symbols-rounded" id="btn-unlock-icon">key</span>
+        <span id="btn-unlock-text">Unlock Control Panel</span>
       </button>
     </div>
   </div>
 
   <!-- Toast Notification -->
   <div class="toast" id="toast">
-    <span class="material-symbols-rounded" id="toast-icon">check_circle</span>
+    <div class="toast-icon-wrap" id="toast-icon-wrap">
+      <span class="material-symbols-rounded" id="toast-icon">check_circle</span>
+    </div>
     <span id="toast-msg">Copied to clipboard</span>
   </div>
 

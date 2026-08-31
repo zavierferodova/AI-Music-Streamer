@@ -228,7 +228,7 @@ def search_unified(
 
     web_res_list = []
     if include_web:
-        web_res = search_music(query, provider="youtube", count=count)
+        web_res = search_music(query, provider="youtube", num=count)
         web_res_list = [asdict(r) for r in web_res.results]
 
     return {

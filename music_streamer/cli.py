@@ -269,18 +269,25 @@ def handle_play(args: argparse.Namespace) -> int:
     db.set_setting("loop", loop_clean)
     db.set_setting("state", "playing")
 
-    # Resolve search query or fetch title if direct URL
+    # Resolve search query (checking local database first) or fetch title if direct URL
     resolved_title = None
     if not url.startswith("http://") and not url.startswith("https://"):
-        print(f"Searching: {url}")
-        res = search_music(url, num=1)
-        if not res.results:
-            print(f"Error: no results for '{url}'", file=sys.stderr)
-            return 2
-        r = res.results[0]
-        url = r.url
-        resolved_title = r.title
-        print(f"Found:    {resolved_title}")
+        local_matches = db.search_local_tracks(url, limit=1)
+        if local_matches:
+            lm = local_matches[0]
+            url = lm["url"]
+            resolved_title = lm["title"]
+            print(f"Matched Local Library: {resolved_title} ({lm.get('source_label', 'Local')})")
+        else:
+            print(f"Searching Web: {url}")
+            res = search_music(url, num=1)
+            if not res.results:
+                print(f"Error: no results for '{url}'", file=sys.stderr)
+                return 2
+            r = res.results[0]
+            url = r.url
+            resolved_title = r.title
+            print(f"Found:    {resolved_title}")
     else:
         meta = fetch_track_metadata(url)
         if meta.get("title") and meta["title"] != url:

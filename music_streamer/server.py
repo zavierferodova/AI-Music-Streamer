@@ -143,6 +143,8 @@ def build_server_status(
             "elapsed_seconds": elapsed,
         },
         "loop": loop,
+        "last_error": getattr(engine, "last_error", None) if engine else None,
+        "is_buffering": bool(engine and engine.state == "playing" and getattr(engine, "is_buffering", False)),
         "playback": playback_state,
         "queue": {
             "count": playback_state["queued_count"],
@@ -567,6 +569,8 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
         elif action == "loop":
             loop_val = payload.get("loop", "toggle")
             engine.post_command({"action": "set_loop", "loop": loop_val})
+        elif action in ["dismiss_error", "clear_error"]:
+            engine.last_error = None
         elif action in ["volume", "set_volume"]:
             vol = payload.get("volume")
             if vol is not None:
@@ -710,6 +714,7 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
         elif path == "/api/playlist/create":
             name = payload.get("name") or "New Playlist"
             pl = self.server.playlist_mgr.create_playlist(name)
+            self.server.ws_hub.broadcast()
             self._send_json({"status": "ok", "playlist": pl})
 
         elif path == "/api/playlist/rename":
@@ -719,11 +724,13 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"status": "error", "error": "Missing target playlist or new_name"})
             else:
                 res = self.server.playlist_mgr.rename_playlist(target, new_name)
+                self.server.ws_hub.broadcast()
                 self._send_json({"status": "ok" if res.get("success") else "error", **res})
 
         elif path == "/api/playlist/delete":
             target = payload.get("name") or payload.get("id") or payload.get("playlist")
             ok = self.server.playlist_mgr.delete_playlist(target) if target else False
+            self.server.ws_hub.broadcast()
             self._send_json({"status": "ok" if ok else "error", "deleted": ok})
 
         elif path == "/api/playlist/add":
@@ -731,12 +738,14 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             url = payload.get("url")
             title = payload.get("title", "")
             t = self.server.playlist_mgr.add_track(target, url=url, title=title)
+            self.server.ws_hub.broadcast()
             self._send_json({"status": "ok", "track": t})
 
         elif path == "/api/playlist/remove":
             target = payload.get("playlist") or payload.get("name") or payload.get("id")
             idx = payload.get("index") if payload.get("index") is not None else payload.get("id")
             ok = self.server.playlist_mgr.remove_track(target, idx)
+            self.server.ws_hub.broadcast()
             self._send_json({"status": "ok" if ok else "error", "removed": ok})
 
         elif path == "/api/playlist/play":
@@ -744,11 +753,13 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             res = self.server.playlist_mgr.play_playlist(target, shuffle=bool(payload.get("shuffle", False)))
             if res.get("success"):
                 engine.post_command({"action": "play"})
+            self.server.ws_hub.broadcast()
             self._send_json(res)
 
         elif path == "/api/playlist/queue":
             target = payload.get("playlist") or payload.get("name") or payload.get("id")
             res = self.server.playlist_mgr.queue_playlist(target, shuffle=bool(payload.get("shuffle", False)))
+            self.server.ws_hub.broadcast()
             self._send_json(res)
 
         elif path == "/api/search":
@@ -796,6 +807,10 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
                 except Exception:
                     pass
             self._send_json({"status": "ok", "volume": engine.volume})
+
+        elif path in ["/api/dismiss_error", "/api/error/dismiss"]:
+            engine.last_error = None
+            self._send_json({"status": "ok"})
 
         else:
             self.send_error(404, "Unknown API endpoint")

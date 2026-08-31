@@ -80,8 +80,10 @@ class PlaylistManager:
             if not thumbnail and meta.get("thumbnail"):
                 thumbnail = meta["thumbnail"]
 
-        if not title:
-            title = url
+        if not title or title == url:
+            import re
+            m = re.search(r"(?:v=|youtu\.be/|shorts/|embed/|watch\?.*v=)([a-zA-Z0-9_-]{11})", url)
+            title = f"YouTube Track ({m.group(1)})" if m else url
 
         return self.db.add_track_to_playlist(name_or_id, url=url, title=title, thumbnail=thumbnail)
 

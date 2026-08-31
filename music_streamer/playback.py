@@ -59,6 +59,20 @@ class PlaybackManager:
         auto_fetch: bool = True,
     ) -> Dict[str, Any]:
         """Appends a new track to the playback list as 'queued' with fetched metadata if title is not provided."""
+        if not url or not url.strip():
+            raise ValueError("Track URL or search query is required")
+
+        url = url.strip()
+
+        # If not a direct URL, search YouTube first
+        if not url.startswith("http://") and not url.startswith("https://"):
+            from music_streamer.search import search_music
+
+            res = search_music(url, num=1)
+            if res.results:
+                url = res.results[0].url
+                title = res.results[0].title
+
         if (not title or title == url) and auto_fetch and (url.startswith("http://") or url.startswith("https://")):
             from music_streamer.search import fetch_track_metadata
 
@@ -68,8 +82,10 @@ class PlaybackManager:
             if not thumbnail and meta.get("thumbnail"):
                 thumbnail = meta["thumbnail"]
 
-        if not title:
-            title = url
+        if not title or title == url:
+            m = re.search(r"(?:v=|youtu\.be/|shorts/|embed/|watch\?.*v=)([a-zA-Z0-9_-]{11})", url)
+            title = f"YouTube Track ({m.group(1)})" if m else url
+
         if not thumbnail:
             thumbnail = get_thumbnail_for_url(url)
         return self.db.add_track(url=url, title=title, thumbnail=thumbnail, status="queued")
@@ -82,6 +98,11 @@ class PlaybackManager:
         auto_fetch: bool = True,
     ):
         """Marks a track matching url as 'playing', while previous playing track becomes 'played'."""
+        if not url or not url.strip():
+            return
+
+        url = url.strip()
+
         if (not title or title == url) and auto_fetch and (url.startswith("http://") or url.startswith("https://")):
             from music_streamer.search import fetch_track_metadata
 
@@ -90,6 +111,10 @@ class PlaybackManager:
                 title = meta["title"]
             if not thumbnail and meta.get("thumbnail"):
                 thumbnail = meta["thumbnail"]
+
+        if not title or title == url:
+            m = re.search(r"(?:v=|youtu\.be/|shorts/|embed/|watch\?.*v=)([a-zA-Z0-9_-]{11})", url)
+            title = f"YouTube Track ({m.group(1)})" if m else url
 
         tracks = self.db.get_tracks()
         self.db.set_setting("last_played_url", url)

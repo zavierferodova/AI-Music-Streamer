@@ -18,8 +18,10 @@ All audio is decoded from YouTube (or SoundCloud/Bandcamp) via `yt-dlp` → `ffm
 
 ### Key Features
 - **24/7 Always-On Live Stream**: HTTP clients stay connected continuously. When music is stopped, paused, or transitioning between songs, the server broadcasts real-time comfort silence at 128 kbps (44.1 kHz stereo).
+- **Zero-Downtime Dynamic Mode Switching**: Switch between `speaker` and `silent` mode on the fly via Web UI or CLI (`./stream.py speaker` / `./stream.py silent`) without restarting the server or interrupting listeners.
 - **Exact Server-Client Synchronization**: Audio heard on the server speaker and audio broadcast to connected clients are fed simultaneously from the same PCM buffer.
-- **SQLite Database Persistence**: Robust transactional state store (`runtime/music_streamer.db` in `WAL` mode) for tracks, fair shuffle cycle state, volume, loop, and security settings.
+- **SQLite Database Persistence & Deduplication**: Robust transactional state store (`runtime/music_streamer.db` in `WAL` mode) for tracks, fair shuffle cycle state, volume, loop, named playlists, and security settings with strict track deduplication.
+- **Real-Time Web Panel & Loading UX**: Glassmorphic UI with top progress bar, skeleton placeholders, audio buffering indicators, playback error diagnostics with Retry/Skip actions, and WebSocket live updates.
 - **Multi-Client Broadcast**: Multiple listeners/devices can connect simultaneously with minimal latency.
 - **Full CLI & Web Controls**: Play, search, queue, pause, resume, shuffle, skip, loop, and adjust volume seamlessly.
 
@@ -29,13 +31,13 @@ All audio is decoded from YouTube (or SoundCloud/Bandcamp) via `yt-dlp` → `ffm
 
 | Script | Purpose |
 |---|---|
-| `~/music-streamer/stream.py` | Manage continuous broadcast server: `start`, `stop`, `status`, `--mode speaker\|silent`, `--daemon` |
-| `~/music-streamer/web/index.html` | Realtime Web Control Panel & audio player (`/` & `/ws` WebSocket sync) |
+| `~/music-streamer/stream.py` | Manage continuous broadcast server: `start`, `stop`, `status`, `speaker`, `silent`, `--mode speaker\|silent`, `--daemon` |
+| `~/music-streamer/web/` | Realtime Web Control Panel & audio player (`/` & `/ws` WebSocket sync) with loading states & error alerts |
 | `~/music-streamer/play.py` | Play a direct URL: `<URL> [VOL 0-100] [LOOP yes\|no]` — synchronized on speaker & HTTP stream |
 | `~/music-streamer/play_search.py` | Search by query and play first result: `<query> [VOL] [LOOP]` — USE ONLY AFTER CONFIRMATION |
 | `~/music-streamer/search.py` | Search provider: `youtube` (default), `soundcloud`, `bandcamp`, `spotify` |
-| `~/music-streamer/playback.py` | Ephemeral Playback tracklist: `add/add-url/list/clear/shuffle/remove/next/play` |
-| `~/music-streamer/playlist.py` | Persistent Named Playlists: `create/list/show/add/remove/delete/play/queue` (cannot be cleared by playback clear) |
+| `~/music-streamer/playback.py` | Ephemeral Playback tracklist: `add/add-url/list/clear/shuffle/remove/next/play` (deduplicated) |
+| `~/music-streamer/playlist.py` | Persistent Named Playlists: `create/list/show/add/remove/delete/play/queue` (deduplicated, persistent) |
 | `~/music-streamer/pause.py` | Pause: mutes ALSA speaker and streams silence to clients |
 | `~/music-streamer/resume.py` | Resume: unmutes ALSA speaker and resumes audio stream in sync |
 | `~/music-streamer/volume.py` | Get/set/mute/unmute volume (synced with Master: `+N`/`-N`, `mute`, `unmute`, absolute `0-100`) |
@@ -51,11 +53,13 @@ All audio is decoded from YouTube (or SoundCloud/Bandcamp) via `yt-dlp` → `ffm
 Use this skill whenever the user asks to:
 - play / search / queue / shuffle music
 - stream music to remote devices (laptop, phone, browser)
+- switch modes between speaker and silent (without restarting server)
 - pause / resume / stop / next / interrupt playback
+- manage playlists (create, list, show, add, remove, delete, play, queue)
 - adjust volume (including mute/unmute, +N/-N) or loop setting
 - check what is playing, queue status, or streaming listeners
 
-Trigger phrases: "play music", "stream music", "search music", "queue", "shuffle", "next", "interrupt", "pause", "resume", "volume", "loop", "stop music", "what's playing", "stream status".
+Trigger phrases: "play music", "stream music", "search music", "queue", "shuffle", "next", "interrupt", "pause", "resume", "volume", "loop", "mode", "speaker", "silent", "stop music", "what's playing", "stream status".
 
 ---
 
@@ -70,41 +74,74 @@ Trigger phrases: "play music", "stream music", "search music", "queue", "shuffle
 ~/music-streamer/stream.py --daemon --mode silent --port 8000
 ```
 
-### 2. Search
+### 2. Switch Audio Mode On-The-Fly (No Server Restart Needed)
 ```bash
-# JSON format for AI agents (UTF-8 safe, structured)
-~/music-streamer/search.py --json "Denny Caknan Wirang" 3
-# Output:
-# {"query":"...","provider":"youtube","count":3,"results":[{"id":"...","title":"...","url":"..."}]}
+# Switch to speaker mode (unmutes local speaker, synced with live stream)
+~/music-streamer/stream.py speaker
 
-# Shortcuts (pipeable)
-~/music-streamer/search.py --first "Denny Caknan Wirang"  # -> URL
-~/music-streamer/search.py --id 1 "Denny Caknan"          # -> ID
-~/music-streamer/search.py --url 2 "Denny Caknan"         # -> URL
+# Switch to silent mode (mutes local speaker, continuous HTTP stream stays alive)
+~/music-streamer/stream.py silent
 ```
 
-### 3. Confirm (MANDATORY for vague / user search queries)
-When a user asks to play a search query, search via `search.py --json` and present the options using `ask_question` (or question modal) before starting playback.
-
-**Correct Flow:**
+### 3. Search & Local-First Discovery Protocol
+Before playing any music query requested by the user, **ALWAYS search first via `search.py --json`**:
 ```bash
-# 1. Search
+# JSON format for AI agents (returns both local_matches and web_results in one call)
 ~/music-streamer/search.py --json "Wirang" 5
-# 2. Ask user via question tool with selectable options
-# 3. Play the selected confirmed URL
-~/music-streamer/play.py "https://www.youtube.com/watch?v=78Y0SxVVxP4" 80 yes
+```
+**Example JSON Output:**
+```json
+{
+  "query": "Wirang",
+  "local_count": 1,
+  "local_matches": [
+    {
+      "url": "https://www.youtube.com/watch?v=78Y0SxVVxP4",
+      "title": "Denny Caknan - Wirang (Official Music Video)",
+      "playlist_name": "Top Pop Hits",
+      "source_label": "Playlist: Top Pop Hits"
+    }
+  ],
+  "web_count": 5,
+  "web_results": [
+    {
+      "id": "fBnqChaU-ck",
+      "title": "GuyonWaton - Wirang (Official Music Video)",
+      "url": "https://www.youtube.com/watch?v=fBnqChaU-ck"
+    },
+    {
+      "id": "78Y0SxVVxP4",
+      "title": "Denny Caknan - Wirang (Official Music Video)",
+      "url": "https://www.youtube.com/watch?v=78Y0SxVVxP4"
+    }
+  ]
+}
 ```
 
-### 4. Play Direct URL
+### 4. Mandatory Confirmation Protocol (Local vs. Web)
+
+When the user asks to play a song/artist:
+1. **Execute Search**: Run `~/music-streamer/search.py --json "<query>" 5`.
+2. **If Local Matches Exist (`local_count > 0`)**:
+   Use `ask_question` to ask the user whether to play from their local library or search from the web.
+   **Options format:**
+   - `"(Recommended) Play from Local Library: <Title> (<source_label>)"`
+   - `"Choose a version from YouTube / Online Search"`
+3. **If User selects Web or No Local Match Exists (`local_count == 0`)**:
+   Use `ask_question` to present the top online results (e.g. `"<Title 1>"`, `"<Title 2>"`) so the user can choose the exact version they want.
+4. **Execute Playback**:
+   Once the user picks an option, play the confirmed URL:
+   ```bash
+   ~/music-streamer/play.py "<URL>" 80 yes
+   ```
+
+### 5. Play Direct URL
+If the user provides an explicit direct URL (e.g., `https://www.youtube.com/watch?v=...`), search confirmation is not required:
 ```bash
-# Direct URL provided by user (no search confirmation needed)
 ~/music-streamer/play.py "https://www.youtube.com/watch?v=78Y0SxVVxP4" 80 yes
-
-# If volume is omitted, it defaults to the system Master volume
-~/music-streamer/play.py "https://www.youtube.com/watch?v=78Y0SxVVxP4"
 ```
 
-### 5. Control While Playing (Live, no restart needed)
+### 6. Control While Playing (Live, no restart needed)
 ```bash
 # Status
 ~/music-streamer/status.py                  # Human-readable
@@ -120,13 +157,14 @@ When a user asks to play a search query, search via `search.py --json` and prese
 
 # Loop control
 ~/music-streamer/loop.py                    # Show loop status
-~/music-streamer/loop.py yes                # Enable repeat (loops track when queue is empty)
-~/music-streamer/loop.py no                 # Disable repeat (one-shot, stops after track)
+~/music-streamer/loop.py repeat             # Loop entire tracklist in order/shuffle
+~/music-streamer/loop.py repeat-one         # Repeat single current track continuously
+~/music-streamer/loop.py off                # Disable repeat (stops after playing once)
 ~/music-streamer/loop.py toggle             # Flip loop setting
 
-# Playback list management
+# Playback list management (Strictly deduplicated)
 ~/music-streamer/playback.py list [--json]     # Show full tracklist (Played, Playing, Upcoming)
-~/music-streamer/playback.py add "Alan Walker" # Search & append first result to playback list
+~/music-streamer/playback.py add "Alan Walker" # Search & append first result (deduplicated)
 ~/music-streamer/playback.py add-url "URL" "Title" # Append specific confirmed URL
 ~/music-streamer/playback.py shuffle           # Randomize unplayed tracks (preserves played history)
 ~/music-streamer/playback.py remove 2          # Remove 2nd track from list
@@ -140,7 +178,7 @@ When a user asks to play a search query, search via `search.py --json` and prese
 ~/music-streamer/playlist.py rename "Favorites" "Top Favs" # Rename a playlist
 ~/music-streamer/playlist.py list [--json]            # List all playlists with track counts
 ~/music-streamer/playlist.py show "Favorites" [--json]# View tracks inside playlist
-~/music-streamer/playlist.py add "Favorites" "<URL>"  # Add track (auto metadata resolution)
+~/music-streamer/playlist.py add "Favorites" "<URL>"  # Add track (deduplicated, auto metadata)
 ~/music-streamer/playlist.py remove "Favorites" 1     # Remove track #1 from playlist
 ~/music-streamer/playlist.py play "Favorites"         # Load and play in sequential order
 ~/music-streamer/playlist.py play "Favorites" --shuffle # Load and play in fair shuffle mode
@@ -154,9 +192,9 @@ When a user asks to play a search query, search via `search.py --json` and prese
 ~/music-streamer/stop.py --all              # Stop music AND shut down stream server daemon
 ```
 
-### 6. Client Listening
+### 7. Client Listening
 Listeners on other devices (laptops, phones, browsers) can tune in:
-- **Web Control Panel & Player**: Open `http://<SERVER_IP>:8000/` in any browser (realtime WebSocket sync)
+- **Web Control Panel & Player**: Open `http://<SERVER_IP>:8000/` in any browser (realtime WebSocket sync, loading skeletons, buffering badges, playback error handling)
 - **Direct Media Stream**: Open `http://<SERVER_IP>:8000/stream.mp3` in VLC / mpv / browser audio
 
 ---
@@ -176,10 +214,11 @@ Listeners on other devices (laptops, phones, browsers) can tune in:
 ```
 ~/music-streamer/
   music_streamer/   # Core Python package
-    db.py           # SQLite database persistence layer (WAL mode)
+    db.py           # SQLite database persistence layer (WAL mode & deduplication)
     config.py       # Constants, paths, audio parameters
     security.py     # OTP authentication & session token manager
     playback.py     # Persistent playback list & fair shuffle cycle engine
+    playlist.py     # Persistent named playlist manager
     search.py       # Universal music search (YouTube, SoundCloud, Bandcamp, Spotify)
     engine.py       # AudioEngine (PCM decoder + ALSA sync + silence stream) & Broadcaster
     ipc.py          # Synchronous Unix domain socket & REST API IPC client
@@ -190,15 +229,19 @@ Listeners on other devices (laptops, phones, browsers) can tune in:
   play_search.py    # Search & play first result
   search.py         # Universal music search (text/json/url/id)
   playback.py       # Persistent playback list management
+  playlist.py       # Named playlists management
   pause.py          # Pause playback (mutes ALSA + streams silence)
   resume.py         # Resume playback
   volume.py         # Master volume control
-  loop.py           # Live loop toggle (yes|no|toggle|status)
+  loop.py           # Live loop toggle (repeat|repeat-one|off|toggle|status)
   otp.py            # One-Time Password (OTP) security manager
   status.py         # Full status inspector
   stop.py           # Stop playback (keeps stream alive in silence mode; --all kills daemon)
-  tests/            # Automated test suite
-  web/index.html    # Realtime Web Control Panel UI (HTML + CSS + JS)
+  tests/            # Automated test suite (69 tests)
+  web/              # Realtime Web Control Panel UI (HTML + CSS + JS)
+    index.html      # HTML UI with progress bar, skeletons, error banners
+    style.css       # Design tokens, glassmorphism, animations
+    app.js          # Client JS, WebSocket sync, live playlist management
   runtime/
     music_streamer.db # SQLite database file (WAL mode)
     control.sock      # UNIX domain socket IPC

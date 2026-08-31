@@ -47,6 +47,10 @@ class DatabaseManager:
             finally:
                 conn.close()
 
+    def init_db(self):
+        """Initialize table schemas, indexes, and cleanup duplicates."""
+        return self._init_db()
+
     def _init_db(self):
         """Initialize table schemas and indexes."""
         with self.get_connection() as conn:
@@ -137,6 +141,36 @@ class DatabaseManager:
                     "INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, ?);",
                     (k, v, now),
                 )
+
+            # Deduplicate existing tracks in playlist_tracks keeping first entry
+            cur.execute(
+                """
+                DELETE FROM playlist_tracks
+                WHERE id NOT IN (
+                    SELECT MIN(id)
+                    FROM playlist_tracks
+                    GROUP BY playlist_id, url
+                );
+                """
+            )
+
+            # Deduplicate existing tracks in playback_tracks keeping active or earliest
+            cur.execute(
+                """
+                DELETE FROM playback_tracks
+                WHERE id NOT IN (
+                    SELECT id FROM (
+                        SELECT id,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY url 
+                                   ORDER BY CASE status WHEN 'playing' THEN 1 WHEN 'queued' THEN 2 ELSE 3 END, 
+                                            sort_order ASC
+                               ) as rn
+                        FROM playback_tracks
+                    ) WHERE rn = 1
+                );
+                """
+            )
             cur.close()
 
     def close(self):
@@ -208,10 +242,31 @@ class DatabaseManager:
         thumbnail: str = "",
         status: str = "queued",
         added_at: Optional[int] = None,
+        allow_duplicate: bool = False,
     ) -> Dict[str, Any]:
         with self.get_connection() as conn:
             cur = conn.cursor()
             now = added_at or int(time.time())
+
+            if not allow_duplicate:
+                cur.execute("SELECT * FROM playback_tracks WHERE url = ? ORDER BY sort_order ASC;", (url,))
+                existing = cur.fetchone()
+                if existing:
+                    existing_id = existing["id"]
+                    new_status = status if (existing["status"] == "played" and status == "queued") else existing["status"]
+                    cur.execute(
+                        """
+                        UPDATE playback_tracks
+                        SET status = ?,
+                            title = CASE WHEN title IS NULL OR title = url OR title LIKE 'YouTube Track%' THEN ? ELSE title END,
+                            thumbnail = COALESCE(NULLIF(?, ''), thumbnail)
+                        WHERE id = ?;
+                        """,
+                        (new_status, title or url, thumbnail or "", existing_id),
+                    )
+                    cur.close()
+                    return self.get_track_by_id(existing_id) or dict(existing)
+
             # Find next sort order
             cur.execute("SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM playback_tracks;")
             next_order = cur.fetchone()["next_order"]
@@ -521,18 +576,38 @@ class DatabaseManager:
         url: str,
         title: str,
         thumbnail: Optional[str] = None,
+        allow_duplicate: bool = False,
     ) -> Optional[Dict[str, Any]]:
-        """Adds a track to a playlist."""
+        """Adds a track to a playlist without duplicate URLs."""
         pl = self.get_playlist(name_or_id)
         if not pl:
             pl = self.create_playlist(name_or_id)
 
-        import uuid
-
-        tid = str(uuid.uuid4())
-        now = int(time.time())
         with self.get_connection() as conn:
             cur = conn.cursor()
+            if not allow_duplicate:
+                cur.execute(
+                    "SELECT * FROM playlist_tracks WHERE playlist_id = ? AND url = ?;",
+                    (pl["id"], url),
+                )
+                existing = cur.fetchone()
+                if existing:
+                    cur.execute(
+                        """
+                        UPDATE playlist_tracks
+                        SET title = CASE WHEN title IS NULL OR title = url OR title LIKE 'YouTube Track%' THEN ? ELSE title END,
+                            thumbnail = COALESCE(NULLIF(?, ''), thumbnail)
+                        WHERE id = ?;
+                        """,
+                        (title or url, thumbnail or "", existing["id"]),
+                    )
+                    cur.close()
+                    return dict(existing)
+
+            import uuid
+
+            tid = str(uuid.uuid4())
+            now = int(time.time())
             cur.execute(
                 "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM playlist_tracks WHERE playlist_id = ?;",
                 (pl["id"],),
