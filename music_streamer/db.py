@@ -2,15 +2,84 @@
 SQLite Database Layer (WAL Mode) for state persistence and synchronization.
 """
 
+import difflib
 import json
+import re
 import sqlite3
 import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from music_streamer.config import DB_PATH, SESSION_DURATION_SECONDS
+
+
+def normalize_search_tokens(text: str) -> Tuple[str, Set[str]]:
+    """
+    Normalizes string by stripping apostrophes/quotes, converting punctuation to spaces,
+    and returning (normalized_string, set_of_word_tokens).
+    Handles smart quotes (' ’ ` ´), dashes, underscores, and unicode.
+    """
+    if not text:
+        return "", set()
+    raw = str(text).lower()
+    # 1. Strip all apostrophes/quotes without adding space ("it's" -> "its", "don't" -> "dont")
+    stripped = re.sub(r"['’`´\"\“\”]", "", raw)
+    # 2. Replace all remaining punctuation/symbols with spaces
+    spaced = re.sub(r"[^a-z0-9\s]", " ", stripped)
+    tokens_raw = re.findall(r"[a-z0-9]+", spaced)
+    # 3. Also include tokens with punctuation replaced from original raw
+    spaced_orig = re.sub(r"[^a-z0-9\s]", " ", raw)
+    tokens_orig = re.findall(r"[a-z0-9]+", spaced_orig)
+
+    tokens = set(tokens_raw + tokens_orig)
+    normalized_str = " ".join(tokens_raw)
+    return normalized_str, tokens
+
+
+def calculate_match_similarity(query: str, candidate: str) -> float:
+    """
+    Calculates match similarity between 0.0 and 1.0.
+    1.0 = exact match
+    0.95 = exact substring match
+    0.90 = all query tokens present in candidate
+    0.50..0.85 = fuzzy / partial token / similar sequence match
+    """
+    q_str, q_tokens = normalize_search_tokens(query)
+    c_str, c_tokens = normalize_search_tokens(candidate)
+    if not q_str or not c_str:
+        return 0.0
+
+    if q_str == c_str:
+        return 1.0
+
+    if q_str in c_str:
+        return 0.95
+
+    # Check if all query tokens are present in candidate tokens
+    if q_tokens and q_tokens.issubset(c_tokens):
+        return 0.90
+
+    # Token overlap ratio (how many query tokens appear in candidate)
+    overlap_count = len(q_tokens & c_tokens)
+    overlap_ratio = overlap_count / max(len(q_tokens), 1)
+
+    # Sequence matcher across whole string and sliding window
+    full_seq = difflib.SequenceMatcher(None, q_str, c_str).ratio()
+    best_window = 0.0
+    q_len = len(q_str)
+    if len(c_str) >= q_len:
+        for i in range(len(c_str) - q_len + 1):
+            ratio = difflib.SequenceMatcher(None, q_str, c_str[i : i + q_len]).ratio()
+            if ratio > best_window:
+                best_window = ratio
+    else:
+        best_window = full_seq
+
+    score = max(overlap_ratio * 0.85, full_seq * 0.85, best_window * 0.88)
+    return round(score, 3)
+
 
 
 class DatabaseManager:
@@ -503,7 +572,7 @@ class DatabaseManager:
             return [dict(r) for r in rows]
 
     def get_playlist(self, name_or_id: str) -> Optional[Dict[str, Any]]:
-        """Gets playlist details and its list of tracks by name or ID."""
+        """Gets playlist details and its list of tracks by name or ID (with fuzzy fallback)."""
         if not name_or_id:
             return None
         with self.get_connection() as conn:
@@ -514,9 +583,24 @@ class DatabaseManager:
             )
             row = cur.fetchone()
             if not row:
-                cur.close()
-                return None
-            pl = dict(row)
+                # Fuzzy normalized fallback for punctuation mismatches (e.g. "its only me" -> "It's Only Me")
+                cur.execute("SELECT * FROM playlists;")
+                all_pls = [dict(r) for r in cur.fetchall()]
+                best_match = None
+                best_score = 0.0
+                for candidate in all_pls:
+                    score = calculate_match_similarity(str(name_or_id), candidate.get("name") or "")
+                    if score > best_score:
+                        best_score = score
+                        best_match = candidate
+                if best_match and best_score >= 0.75:
+                    pl = best_match
+                else:
+                    cur.close()
+                    return None
+            else:
+                pl = dict(row)
+
             cur.execute(
                 "SELECT * FROM playlist_tracks WHERE playlist_id = ? ORDER BY sort_order ASC, added_at ASC;",
                 (pl["id"],),
@@ -526,6 +610,27 @@ class DatabaseManager:
             pl["tracks"] = tracks
             pl["track_count"] = len(tracks)
             return pl
+
+    def search_playlists(self, query: str) -> List[Dict[str, Any]]:
+        """
+        Fuzzy searches playlists by name with punctuation and typo tolerance.
+        """
+        clean_q = (query or "").strip()
+        all_pls = self.get_playlists()
+        if not clean_q:
+            return all_pls
+
+        scored_pls = []
+        for pl in all_pls:
+            score = calculate_match_similarity(clean_q, pl.get("name") or "")
+            if score >= 0.35:
+                pl_copy = dict(pl)
+                pl_copy["match_score"] = score
+                pl_copy["is_exact_match"] = score >= 0.90
+                scored_pls.append(pl_copy)
+
+        scored_pls.sort(key=lambda p: (p.get("match_score", 0.0), p.get("updated_at", 0)), reverse=True)
+        return scored_pls
 
     def rename_playlist(self, name_or_id: str, new_name: str) -> Optional[Dict[str, Any]]:
         """Renames an existing playlist to a new name."""
@@ -664,58 +769,84 @@ class DatabaseManager:
             cur.close()
             return deleted
 
-    def search_local_tracks(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
+    def search_local_tracks(
+        self, query: str, limit: int = 20, playlist_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """
-        Searches all tracks across playlists and active playback queue in SQLite.
-        Returns matching tracks with their source information (playlist name or queue status).
+        Searches all tracks across playlists and active playback queue in SQLite
+        with fuzzy matching, punctuation normalization (e.g. "its only me" matches "It's Only Me"),
+        and similarity ranking.
         """
         clean_q = (query or "").strip()
         if not clean_q:
             return []
 
-        pattern = f"%{clean_q}%"
         results: List[Dict[str, Any]] = []
-        seen_keys = set()
 
         with self.get_connection() as conn:
             cur = conn.cursor()
 
             # 1. Search in Playlist Tracks
-            cur.execute(
-                """
-                SELECT pt.id, pt.url, pt.title, pt.thumbnail, pt.playlist_id, p.name AS playlist_name, 'playlist' AS source_type
-                FROM playlist_tracks pt
-                JOIN playlists p ON pt.playlist_id = p.id
-                WHERE pt.title LIKE ? OR pt.url LIKE ? OR p.name LIKE ?
-                ORDER BY pt.added_at DESC
-                LIMIT ?;
-                """,
-                (pattern, pattern, pattern, limit),
-            )
+            if playlist_id:
+                cur.execute(
+                    """
+                    SELECT pt.id, pt.url, pt.title, pt.thumbnail, pt.playlist_id, p.name AS playlist_name, 'playlist' AS source_type, pt.added_at
+                    FROM playlist_tracks pt
+                    JOIN playlists p ON pt.playlist_id = p.id
+                    WHERE pt.playlist_id = ?
+                    ORDER BY pt.sort_order ASC;
+                    """,
+                    (playlist_id,),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT pt.id, pt.url, pt.title, pt.thumbnail, pt.playlist_id, p.name AS playlist_name, 'playlist' AS source_type, pt.added_at
+                    FROM playlist_tracks pt
+                    JOIN playlists p ON pt.playlist_id = p.id
+                    ORDER BY pt.added_at DESC;
+                    """
+                )
             for row in cur.fetchall():
                 item = dict(row)
                 item["source_label"] = f"Playlist: {item['playlist_name']}"
-                results.append(item)
-                seen_keys.add((item["url"], item["playlist_id"]))
+
+                score_title = calculate_match_similarity(clean_q, item.get("title") or "")
+                score_url = calculate_match_similarity(clean_q, item.get("url") or "")
+                score_pl = calculate_match_similarity(clean_q, item.get("playlist_name") or "") if not playlist_id else 0.0
+                best_score = max(score_title, score_url, score_pl * 0.8)
+
+                if best_score >= 0.38:
+                    item["match_score"] = best_score
+                    item["is_exact_match"] = best_score >= 0.90
+                    results.append(item)
 
             # 2. Search in Playback Tracks (Active Queue & History)
-            cur.execute(
-                """
-                SELECT id, url, title, thumbnail, status, 'playback' AS source_type
-                FROM playback_tracks
-                WHERE title LIKE ? OR url LIKE ?
-                ORDER BY added_at DESC
-                LIMIT ?;
-                """,
-                (pattern, pattern, limit),
-            )
-            for row in cur.fetchall():
-                item = dict(row)
-                item["source_label"] = f"Playback Queue ({item['status'].capitalize()})"
-                results.append(item)
+            if not playlist_id:
+                cur.execute(
+                    """
+                    SELECT id, url, title, thumbnail, status, 'playback' AS source_type, added_at
+                    FROM playback_tracks
+                    ORDER BY added_at DESC;
+                    """
+                )
+                for row in cur.fetchall():
+                    item = dict(row)
+                    item["source_label"] = f"Playback Queue ({item['status'].capitalize()})"
+
+                    score_title = calculate_match_similarity(clean_q, item.get("title") or "")
+                    score_url = calculate_match_similarity(clean_q, item.get("url") or "")
+                    best_score = max(score_title, score_url)
+
+                    if best_score >= 0.38:
+                        item["match_score"] = best_score
+                        item["is_exact_match"] = best_score >= 0.90
+                        results.append(item)
 
             cur.close()
 
+        # Sort: highest similarity score first, then newest added_at
+        results.sort(key=lambda x: (x.get("match_score", 0.0), x.get("added_at", 0)), reverse=True)
         return results[:limit]
 
 

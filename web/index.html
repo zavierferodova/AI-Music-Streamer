@@ -422,6 +422,12 @@
             </div>
           </div>
 
+          <!-- Active Playlist Track Filter Input -->
+          <div class="playlist-track-filter-box" id="playlist-track-filter-box" style="display: none; margin-bottom: 12px; position: relative;">
+            <span class="material-symbols-rounded" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 18px; pointer-events: none;">search</span>
+            <input type="text" id="playlist-track-filter-input" class="input-field" style="padding-left: 38px; font-size: 0.82rem; height: 36px;" placeholder="Search & filter tracks in this playlist..." oninput="filterActivePlaylistTracks(this.value)">
+          </div>
+
           <!-- Active Playlist Tracklist -->
           <ul class="playback-list playlist-tracks-scroll" id="playlist-tracks-container">
             <div class="playback-empty" id="playlist-empty-state">Select or create a playlist on the left.</div>

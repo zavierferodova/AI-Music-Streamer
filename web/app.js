@@ -21,6 +21,36 @@ let lastKnownErrorTimestamp = null;
 let lastRenderedPlaybackSignature = '';
 let lastRenderedPlaylistsNavSignature = '';
 let lastRenderedActivePlaylistSignature = '';
+let activePlaylistTrackFilter = '';
+
+function normalizeSearchText(str) {
+  if (!str) return '';
+  return String(str).toLowerCase()
+    .replace(/['’`´"“”]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function matchesSearchQuery(target, query) {
+  if (!query) return true;
+  if (!target) return false;
+  const nTarget = normalizeSearchText(target);
+  const nQuery = normalizeSearchText(query);
+  if (!nQuery) return true;
+  if (nTarget.includes(nQuery)) return true;
+
+  const qTokens = nQuery.split(' ').filter(Boolean);
+  const tTokens = nTarget.split(' ').filter(Boolean);
+
+  if (qTokens.every(q => tTokens.some(t => t.includes(q)))) return true;
+
+  if (qTokens.length >= 2) {
+    const matched = qTokens.filter(q => tTokens.some(t => t.includes(q))).length;
+    if (matched / qTokens.length >= 0.5) return true;
+  }
+  return false;
+}
 
 const audio = document.getElementById('browser-audio');
 const audioBtn = document.getElementById('stream-audio-btn');
@@ -806,8 +836,16 @@ async function loadActivePlaylist(name, showSkeleton = false) {
 }
 
 function filterPlaylistList(query) {
-  playlistFilterQuery = (query || '').trim().toLowerCase();
+  playlistFilterQuery = (query || '').trim();
   renderPlaylistNav(currentPlaylists);
+}
+
+function filterActivePlaylistTracks(query) {
+  activePlaylistTrackFilter = (query || '').trim();
+  if (loadedPlaylistData) {
+    lastRenderedActivePlaylistSignature = '';
+    renderActivePlaylist(loadedPlaylistData);
+  }
 }
 
 function renderPlaylistNav(pls) {
@@ -826,6 +864,7 @@ function renderPlaylistNav(pls) {
     }
     document.getElementById('active-playlist-toolbar').style.display = 'none';
     document.getElementById('playlist-add-box').style.display = 'none';
+    document.getElementById('playlist-track-filter-box').style.display = 'none';
     document.getElementById('playlist-tracks-container').innerHTML = '<div class="playback-empty">No active playlist selected.</div>';
     selectedPlaylistName = null;
     loadedPlaylistData = null;
@@ -834,7 +873,7 @@ function renderPlaylistNav(pls) {
   }
 
   const filtered = playlistFilterQuery
-    ? currentPlaylists.filter(p => p.name.toLowerCase().includes(playlistFilterQuery))
+    ? currentPlaylists.filter(p => matchesSearchQuery(p.name, playlistFilterQuery))
     : currentPlaylists;
 
   if (!selectedPlaylistName || !currentPlaylists.some(p => p.name.toLowerCase() === selectedPlaylistName.toLowerCase())) {
@@ -900,18 +939,27 @@ function renderActivePlaylist(pl) {
   if (!pl) return;
   const toolbar = document.getElementById('active-playlist-toolbar');
   const addBox = document.getElementById('playlist-add-box');
+  const filterBox = document.getElementById('playlist-track-filter-box');
   const nameElem = document.getElementById('active-playlist-name');
   const countElem = document.getElementById('active-playlist-track-count');
   const listElem = document.getElementById('playlist-tracks-container');
 
   if (toolbar) toolbar.style.display = 'flex';
   if (addBox) addBox.style.display = 'flex';
+  if (filterBox) filterBox.style.display = (pl.tracks && pl.tracks.length > 0) ? 'block' : 'none';
   if (nameElem && nameElem.innerText !== pl.name) nameElem.innerText = pl.name;
-  const countStr = `${pl.tracks?.length || 0} tracks`;
+
+  const rawTracks = pl.tracks || [];
+  const tracks = activePlaylistTrackFilter
+    ? rawTracks.filter(t => matchesSearchQuery((t.title || '') + ' ' + (t.url || ''), activePlaylistTrackFilter))
+    : rawTracks;
+
+  const countStr = activePlaylistTrackFilter
+    ? `${tracks.length} of ${rawTracks.length} tracks matching`
+    : `${rawTracks.length} tracks`;
   if (countElem && countElem.innerText !== countStr) countElem.innerText = countStr;
 
-  const tracks = pl.tracks || [];
-  const plTracksSignature = (pl.name || '') + '_' + JSON.stringify(tracks.map(t => ({
+  const plTracksSignature = (pl.name || '') + '_' + activePlaylistTrackFilter + '_' + JSON.stringify(tracks.map(t => ({
     id: t.id,
     url: t.url,
     title: t.title,
@@ -920,8 +968,10 @@ function renderActivePlaylist(pl) {
 
   if (listElem && plTracksSignature !== lastRenderedActivePlaylistSignature) {
     lastRenderedActivePlaylistSignature = plTracksSignature;
-    if (tracks.length === 0) {
+    if (rawTracks.length === 0) {
       listElem.innerHTML = '<div class="playback-empty">This playlist is empty. Add songs using the input below!</div>';
+    } else if (tracks.length === 0) {
+      listElem.innerHTML = `<div class="playback-empty">No tracks in this playlist match "${escapeHtml(activePlaylistTrackFilter)}".</div>`;
     } else {
       listElem.innerHTML = tracks.map((t, idx) => {
         const displayInfo = formatTrackDisplay(t.title, t.url);
@@ -1181,6 +1231,12 @@ async function executeUniversalSearch() {
           const safeUrl = escapeHtml(item.url || '');
           const safeSrc = escapeHtml(item.source_label || 'Local');
           const safeThumb = escapeHtml(item.thumbnail || '');
+          const score = item.match_score || 0;
+          const isExact = item.is_exact_match || score >= 0.90;
+          const pct = Math.round(score * 100);
+          const matchBadge = isExact
+            ? '<span class="badge" style="font-size: 0.68rem; padding: 1px 6px; background: rgba(16,185,129,0.15); color: var(--emerald); border: 1px solid rgba(16,185,129,0.3);">Exact Match</span>'
+            : `<span class="badge" style="font-size: 0.68rem; padding: 1px 6px; background: rgba(245,158,11,0.15); color: var(--amber); border: 1px solid rgba(245,158,11,0.3);">${pct}% Similar</span>`;
 
           const thumbHtml = safeThumb ? `
             <div class="playback-thumb-box" style="width: 38px; height: 38px;">
@@ -1199,8 +1255,9 @@ async function executeUniversalSearch() {
                 ${thumbHtml}
                 <div class="search-item-text">
                   <div class="search-item-title" title="${safeTitle}">${safeTitle}</div>
-                  <div class="search-item-source">
+                  <div class="search-item-source" style="display: flex; gap: 6px; align-items: center; margin-top: 2px;">
                     <span class="badge badge-server" style="font-size: 0.7rem; padding: 1px 6px;">${safeSrc}</span>
+                    ${matchBadge}
                   </div>
                 </div>
               </div>

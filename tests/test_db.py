@@ -141,6 +141,48 @@ class TestDatabaseManager(unittest.TestCase):
         self.assertIn("tok1", all_sessions)
         self.assertNotIn("tok2", all_sessions)
 
+    def test_fuzzy_search_and_normalization(self):
+        """Verify search_local_tracks matches queries regardless of apostrophes and punctuation."""
+        from music_streamer.db import calculate_match_similarity, normalize_search_tokens
+
+        # Normalization tests
+        s, tokens = normalize_search_tokens("Kaleb J - It's Only Me (Official MV)")
+        self.assertIn("its", tokens)
+        self.assertIn("kaleb", tokens)
+        self.assertIn("only", tokens)
+        self.assertIn("me", tokens)
+
+        # Similarity score tests
+        score_exact = calculate_match_similarity("It's only me", "Kaleb J - It's Only Me (Official MV)")
+        score_no_apostrophe = calculate_match_similarity("Its only me", "Kaleb J - It's Only Me (Official MV)")
+        self.assertGreaterEqual(score_exact, 0.90)
+        self.assertGreaterEqual(score_no_apostrophe, 0.90)
+
+        # Create playlist with track containing apostrophe
+        self.db.create_playlist("Top Hits")
+        self.db.add_track_to_playlist("Top Hits", url="https://youtube.com/watch?v=kaleb1", title="Kaleb J - It's Only Me (Official Music Video)")
+
+        # Search with "Its only me" (no apostrophe)
+        matches1 = self.db.search_local_tracks("Its only me")
+        self.assertEqual(len(matches1), 1)
+        self.assertEqual(matches1[0]["title"], "Kaleb J - It's Only Me (Official Music Video)")
+        self.assertTrue(matches1[0]["is_exact_match"])
+
+        # Search with "It's only me" (with apostrophe)
+        matches2 = self.db.search_local_tracks("It's only me")
+        self.assertEqual(len(matches2), 1)
+        self.assertEqual(matches2[0]["title"], "Kaleb J - It's Only Me (Official Music Video)")
+
+        # Search with word swap / partial: "kaleb only me"
+        matches3 = self.db.search_local_tracks("kaleb only me")
+        self.assertEqual(len(matches3), 1)
+        self.assertEqual(matches3[0]["title"], "Kaleb J - It's Only Me (Official Music Video)")
+
+        # Playlist fuzzy lookup: get_playlist("tophits")
+        pl_fuzzy = self.db.get_playlist("tophits")
+        self.assertIsNotNone(pl_fuzzy)
+        self.assertEqual(pl_fuzzy["name"], "Top Hits")
+
 
 if __name__ == "__main__":
     unittest.main()

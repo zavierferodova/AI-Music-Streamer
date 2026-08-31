@@ -362,13 +362,31 @@ def handle_search(args: argparse.Namespace) -> int:
         return 0
 
     if not args.first and args.url == 0 and args.id == 0 and local_matches:
+        exacts = [m for m in local_matches if m.get("is_exact_match") or m.get("match_score", 0) >= 0.90]
+        similars = [m for m in local_matches if not (m.get("is_exact_match") or m.get("match_score", 0) >= 0.90)]
+
         print("═" * 60)
         print(f" 📚 LOCAL LIBRARY MATCHES ({len(local_matches)} found in Playlists & Queue)")
         print("═" * 60)
-        for idx, lm in enumerate(local_matches, 1):
-            src = lm.get("source_label", "Local")
-            print(f"  [{idx}] {lm['title']} ({src})")
-            print(f"      {lm['url']}")
+        idx_counter = 1
+        if exacts:
+            for lm in exacts:
+                src = lm.get("source_label", "Local")
+                print(f"  [{idx_counter}] 🎯 {lm['title']}")
+                print(f"      Source: {src}  (Exact Match)")
+                print(f"      URL:    {lm['url']}")
+                idx_counter += 1
+        if similars:
+            if exacts:
+                print("  ─" * 29)
+                print("  🔍 Similar Local Titles:")
+            for lm in similars:
+                src = lm.get("source_label", "Local")
+                pct = int(round(lm.get("match_score", 0) * 100))
+                print(f"  [{idx_counter}] 🔹 {lm['title']}")
+                print(f"      Source: {src}  ({pct}% Similar)")
+                print(f"      URL:    {lm['url']}")
+                idx_counter += 1
         print("═" * 60)
         print(" 🌐 WEB SEARCH RESULTS (Online)")
         print("═" * 60)
