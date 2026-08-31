@@ -11,6 +11,7 @@ import subprocess
 import sys
 import threading
 import time
+from dataclasses import asdict
 from typing import Optional
 
 from music_streamer.config import (
