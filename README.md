@@ -52,11 +52,11 @@ sudo apt install -y yt-dlp ffmpeg alsa-utils nodejs python3 mpv
 
 ### 1. Start Continuous Broadcast Stream
 ```bash
-# Start stream server in background (mode: speaker + HTTP stream in sync)
-./stream.py --daemon --mode speaker --port 8000
+# Start stream server in background (default: silent mode, HTTP stream only)
+./stream.py --daemon --port 8000
 
-# Or start in silent mode (no server speaker, only HTTP broadcast)
-./stream.py --daemon --mode silent --port 8000
+# Or start in speaker sync mode (unmutes local machine speaker as well)
+./stream.py --daemon --mode speaker --port 8000
 ```
 
 ### 2. Connect Web Player & Listen Live (Laptop / Phone / Any Browser)

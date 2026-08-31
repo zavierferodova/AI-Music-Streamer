@@ -12,14 +12,15 @@ metadata:
 ## What I do
 
 Control local music playback and 24/7 continuous HTTP MP3 live audio streaming on this Ubuntu server via the `~/music-streamer/` Python suite backed by an SQLite database.
-All audio is decoded from YouTube (or SoundCloud/Bandcamp) via `yt-dlp` → `ffmpeg` and concurrently fed in exact synchronization to:
-1. **Server Speaker (ALSA)** on device `default` (when in `speaker` mode)
-2. **Continuous HTTP Live Stream** broadcasted at `http://<SERVER_IP>:8000/stream.mp3`
+All audio is decoded from YouTube (or SoundCloud/Bandcamp) via `yt-dlp` → `ffmpeg` and concurrently fed to:
+1. **Continuous HTTP Live Stream (Default)** broadcasted at `http://<SERVER_IP>:8000/stream.mp3` (always on in default `silent` mode)
+2. **Server Speaker (ALSA)** on device `default` (when explicitly switched to `speaker` mode)
 
 ### Key Features
+- **Default Silent Broadcast Mode**: By default, the server runs in `silent` mode (HTTP stream broadcast only, keeping server hardware speaker silent).
 - **24/7 Always-On Live Stream**: HTTP clients stay connected continuously. When music is stopped, paused, or transitioning between songs, the server broadcasts real-time comfort silence at 128 kbps (44.1 kHz stereo).
-- **Zero-Downtime Dynamic Mode Switching**: Switch between `speaker` and `silent` mode on the fly via Web UI or CLI (`./stream.py speaker` / `./stream.py silent`) without restarting the server or interrupting listeners.
-- **Exact Server-Client Synchronization**: Audio heard on the server speaker and audio broadcast to connected clients are fed simultaneously from the same PCM buffer.
+- **Zero-Downtime Dynamic Mode Switching**: Switch between `silent` (default) and `speaker` mode on the fly via Web UI or CLI (`./stream.py speaker` / `./stream.py silent`) without restarting the server or interrupting listeners.
+- **Exact Server-Client Synchronization**: When in `speaker` mode, audio heard on the server speaker and audio broadcast to connected clients are fed simultaneously from the same PCM buffer.
 - **SQLite Database Persistence & Deduplication**: Robust transactional state store (`runtime/music_streamer.db` in `WAL` mode) for tracks, fair shuffle cycle state, volume, loop, named playlists, and security settings with strict track deduplication.
 - **Real-Time Web Panel & Loading UX**: Glassmorphic UI with top progress bar, skeleton placeholders, audio buffering indicators, playback error diagnostics with Retry/Skip actions, and WebSocket live updates.
 - **Multi-Client Broadcast**: Multiple listeners/devices can connect simultaneously with minimal latency.
@@ -31,15 +32,15 @@ All audio is decoded from YouTube (or SoundCloud/Bandcamp) via `yt-dlp` → `ffm
 
 | Script | Purpose |
 |---|---|
-| `~/music-streamer/stream.py` | Manage continuous broadcast server: `start`, `stop`, `status`, `speaker`, `silent`, `--mode speaker\|silent`, `--daemon` |
+| `~/music-streamer/stream.py` | Manage continuous broadcast server: `start`, `stop`, `status`, `speaker`, `silent`, `--mode silent\|speaker` (default: `silent`), `--daemon` |
 | `~/music-streamer/web/` | Realtime Web Control Panel & audio player (`/` & `/ws` WebSocket sync) with loading states & error alerts |
-| `~/music-streamer/play.py` | Play a direct URL: `<URL> [VOL 0-100] [LOOP yes\|no]` — synchronized on speaker & HTTP stream |
+| `~/music-streamer/play.py` | Play a direct URL: `<URL> [VOL 0-100] [LOOP yes\|no]` — plays on HTTP stream (and speaker if in speaker mode) |
 | `~/music-streamer/play_search.py` | Search by query and play first result: `<query> [VOL] [LOOP]` — USE ONLY AFTER CONFIRMATION |
 | `~/music-streamer/search.py` | Search provider: `youtube` (default), `soundcloud`, `bandcamp`, `spotify` |
 | `~/music-streamer/playback.py` | Ephemeral Playback tracklist: `add/add-url/list/clear/shuffle/remove/next/play` (deduplicated) |
 | `~/music-streamer/playlist.py` | Persistent Named Playlists: `create/list/show/add/remove/delete/play/queue` (deduplicated, persistent) |
-| `~/music-streamer/pause.py` | Pause: mutes ALSA speaker and streams silence to clients |
-| `~/music-streamer/resume.py` | Resume: unmutes ALSA speaker and resumes audio stream in sync |
+| `~/music-streamer/pause.py` | Pause: pauses playback and streams comfort silence to clients |
+| `~/music-streamer/resume.py` | Resume: resumes audio stream decoding in sync |
 | `~/music-streamer/volume.py` | Get/set/mute/unmute volume (synced with Master: `+N`/`-N`, `mute`, `unmute`, absolute `0-100`) |
 | `~/music-streamer/loop.py` | Live toggle loop: `[repeat|repeat-one|off|toggle|status]` (`repeat`=all tracks in order/shuffle, `repeat-one`=single track) |
 | `~/music-streamer/otp.py` | One-Time Password (OTP) security manager: `show`, `new`, `on`, `off`, `sessions` |
@@ -67,20 +68,20 @@ Trigger phrases: "play music", "stream music", "search music", "queue", "shuffle
 
 ### 1. Start Stream Server (if not running)
 ```bash
-# Start background broadcast daemon (mode: speaker + HTTP stream in sync)
-~/music-streamer/stream.py --daemon --mode speaker --port 8000
+# Start background broadcast daemon (default: silent mode, HTTP stream only)
+~/music-streamer/stream.py --daemon --port 8000
 
-# Or silent mode (HTTP stream broadcast only, server speaker silent)
-~/music-streamer/stream.py --daemon --mode silent --port 8000
+# Or explicitly start in speaker sync mode (unmutes local machine speaker as well)
+~/music-streamer/stream.py --daemon --mode speaker --port 8000
 ```
 
 ### 2. Switch Audio Mode On-The-Fly (No Server Restart Needed)
 ```bash
+# Switch to silent mode (default: mutes local speaker, continuous HTTP stream stays alive)
+~/music-streamer/stream.py silent
+
 # Switch to speaker mode (unmutes local speaker, synced with live stream)
 ~/music-streamer/stream.py speaker
-
-# Switch to silent mode (mutes local speaker, continuous HTTP stream stays alive)
-~/music-streamer/stream.py silent
 ```
 
 ### 3. Search & Local-First Discovery Protocol
