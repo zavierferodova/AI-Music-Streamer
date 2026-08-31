@@ -177,6 +177,51 @@ class TestPlaybackManager(unittest.TestCase):
             t = self.playback.add_track("https://www.youtube.com/watch?v=78Y0SxVVxP4")
             self.assertEqual(t["title"], "Denny Caknan - Wirang")
             self.assertEqual(t["thumbnail"], "https://i.ytimg.com/vi/78Y0SxVVxP4/hqdefault.jpg")
+    def test_get_previous_track_progression(self):
+        """Verify moving backwards through track history."""
+        self.playback.add_track("https://youtube.com/watch?v=1", "Song 1")
+        self.playback.add_track("https://youtube.com/watch?v=2", "Song 2")
+        self.playback.add_track("https://youtube.com/watch?v=3", "Song 3")
+
+        # Progress to Song 1, then Song 2, then Song 3
+        self.playback.get_next_track_for_playback(loop=False)  # Song 1
+        self.playback.get_next_track_for_playback(loop=False)  # Song 2
+        t3, _ = self.playback.get_next_track_for_playback(loop=False)  # Song 3
+        self.assertEqual(t3["title"], "Song 3")
+
+        state = self.playback.get_state()
+        self.assertEqual(state["played_count"], 2)  # Song 1, Song 2
+        self.assertEqual(state["now_playing"]["title"], "Song 3")
+
+        # Step back to Song 2
+        t2, is_cycle = self.playback.get_previous_track_for_playback(loop=False)
+        self.assertIsNotNone(t2)
+        self.assertEqual(t2["title"], "Song 2")
+        self.assertFalse(is_cycle)
+        self.assertEqual(self.playback.get_state()["now_playing"]["title"], "Song 2")
+
+        # Step back to Song 1
+        t1, is_cycle = self.playback.get_previous_track_for_playback(loop=False)
+        self.assertIsNotNone(t1)
+        self.assertEqual(t1["title"], "Song 1")
+        self.assertFalse(is_cycle)
+        self.assertEqual(self.playback.get_state()["now_playing"]["title"], "Song 1")
+
+    def test_previous_track_loop_cycle(self):
+        """Verify previous track wraps to end of list when at start and loop=True."""
+        self.playback.add_track("https://youtube.com/watch?v=1", "Song 1")
+        self.playback.add_track("https://youtube.com/watch?v=2", "Song 2")
+        self.playback.add_track("https://youtube.com/watch?v=3", "Song 3")
+
+        # Play first track (Song 1)
+        t1, _ = self.playback.get_next_track_for_playback(loop=True)
+        self.assertEqual(t1["title"], "Song 1")
+
+        # Previous with loop=True wraps around to last track (Song 3)
+        t_last, is_cycle = self.playback.get_previous_track_for_playback(loop=True)
+        self.assertIsNotNone(t_last)
+        self.assertEqual(t_last["title"], "Song 3")
+        self.assertTrue(is_cycle)
 
 
 if __name__ == "__main__":

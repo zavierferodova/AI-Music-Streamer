@@ -232,6 +232,8 @@ def build_playback_parser() -> argparse.ArgumentParser:
             "shuffle",
             "next",
             "skip",
+            "prev",
+            "previous",
             "play",
             "interrupt",
             "remove",
@@ -596,6 +598,11 @@ def handle_playback(args: argparse.Namespace) -> int:
         send_ipc_command({"action": "skip"})
         return 0
 
+    elif cmd in ["prev", "previous"]:
+        print("Playing previous track...")
+        send_ipc_command({"action": "prev"})
+        return 0
+
     elif cmd == "play":
         if targets and targets[0].isdigit():
             idx = int(targets[0]) - 1
@@ -838,6 +845,26 @@ def handle_resume(args: argparse.Namespace) -> int:
     send_ipc_command({"action": "resume"})
     db.set_setting("state", "playing")
     print(f"Resumed at {vol}%")
+    return 0
+
+
+def handle_prev(args: argparse.Namespace) -> int:
+    server_pid = is_server_running()
+    if not server_pid:
+        print("Error: stream server is not running", file=sys.stderr)
+        return 1
+    print("Playing previous track...")
+    send_ipc_command({"action": "prev"})
+    return 0
+
+
+def handle_skip(args: argparse.Namespace) -> int:
+    server_pid = is_server_running()
+    if not server_pid:
+        print("Error: stream server is not running", file=sys.stderr)
+        return 1
+    print("Skipping to next track...")
+    send_ipc_command({"action": "skip"})
     return 0
 
 

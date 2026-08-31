@@ -285,6 +285,18 @@ class TestWebServer(unittest.TestCase):
         self.assertEqual(resp.status, 200)
         resp.read()
 
+        # POST /api/skip
+        conn.request("POST", "/api/skip", body=json.dumps({}), headers=auth_header)
+        resp = conn.getresponse()
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(json.loads(resp.read().decode("utf-8"))["action"], "skip")
+
+        # POST /api/prev
+        conn.request("POST", "/api/prev", body=json.dumps({}), headers=auth_header)
+        resp = conn.getresponse()
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(json.loads(resp.read().decode("utf-8"))["action"], "prev")
+
         # POST /api/stop
         conn.request("POST", "/api/stop", body=json.dumps({}), headers=auth_header)
         resp = conn.getresponse()

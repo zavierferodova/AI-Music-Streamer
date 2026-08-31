@@ -7,6 +7,7 @@ Usage:
   ./playback.py list [--json]
   ./playback.py shuffle
   ./playback.py next
+  ./playback.py prev
   ./playback.py play [N]
   ./playback.py interrupt <URL|query>
   ./playback.py remove <N>

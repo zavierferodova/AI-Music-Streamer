@@ -45,6 +45,12 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(args_list.command, "list")
         self.assertTrue(args_list.json)
 
+        args_next = parser.parse_args(["next"])
+        self.assertEqual(args_next.command, "next")
+
+        args_prev = parser.parse_args(["prev"])
+        self.assertEqual(args_prev.command, "prev")
+
     def test_volume_parser(self):
         """Verify volume CLI arguments."""
         parser = build_volume_parser()

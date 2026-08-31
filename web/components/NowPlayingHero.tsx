@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   Play,
   Pause,
+  SkipBack,
   SkipForward,
   Repeat,
   Repeat1,
@@ -25,6 +26,7 @@ interface NowPlayingHeroProps {
   status: ServerStatus | null;
   volume: number;
   onTogglePlayPause: () => void;
+  onPlayPrevious: () => void;
   onSkipTrack: () => void;
   onStopMusic: () => void;
   onToggleLoop: () => void;
@@ -38,6 +40,7 @@ export function NowPlayingHero({
   status,
   volume,
   onTogglePlayPause,
+  onPlayPrevious,
   onSkipTrack,
   onStopMusic,
   onToggleLoop,
@@ -181,7 +184,17 @@ export function NowPlayingHero({
       </div>
 
       {/* Control Buttons Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-2.5">
+        {/* Previous Button */}
+        <button
+          onClick={onPlayPrevious}
+          className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 text-xs font-semibold transition-all hover:scale-105 active:scale-95"
+          title="Play Previous Track"
+        >
+          <SkipBack className="w-4 h-4 text-slate-300" />
+          <span>Previous</span>
+        </button>
+
         {/* Play/Pause Button */}
         <button
           onClick={onTogglePlayPause}
@@ -195,9 +208,10 @@ export function NowPlayingHero({
         <button
           onClick={onSkipTrack}
           className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 text-xs font-semibold transition-all hover:scale-105 active:scale-95"
+          title="Skip to Next Track"
         >
           <SkipForward className="w-4 h-4 text-slate-300" />
-          <span>Skip Next</span>
+          <span>Next</span>
         </button>
 
         {/* Loop Toggle */}

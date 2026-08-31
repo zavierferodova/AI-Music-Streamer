@@ -37,7 +37,8 @@ All audio is decoded from YouTube (or SoundCloud/Bandcamp) via `yt-dlp` → `ffm
 | `~/music-streamer/play.py` | Play a direct URL: `<URL> [VOL 0-100] [LOOP yes\|no]` — plays on HTTP stream (and speaker if in speaker mode) |
 | `~/music-streamer/play_search.py` | Search by query and play first result: `<query> [VOL] [LOOP]` — USE ONLY AFTER CONFIRMATION |
 | `~/music-streamer/search.py` | Search provider: `youtube` (default), `soundcloud`, `bandcamp`, `spotify` |
-| `~/music-streamer/playback.py` | Ephemeral Playback tracklist: `add/add-url/list/clear/shuffle/remove/next/play` (deduplicated) |
+| `~/music-streamer/playback.py` | Ephemeral Playback tracklist: `add/add-url/list/clear/shuffle/remove/next/prev/play` (deduplicated) |
+| `~/music-streamer/prev.py` | Play previous track from playback history / loop wrap |
 | `~/music-streamer/playlist.py` | Persistent Named Playlists: `create/list/show/add/remove/delete/play/queue` (deduplicated, persistent) |
 | `~/music-streamer/pause.py` | Pause: pauses playback and streams comfort silence to clients |
 | `~/music-streamer/resume.py` | Resume: resumes audio stream decoding in sync |
@@ -55,7 +56,7 @@ Use this skill whenever the user asks to:
 - play / search / queue / shuffle music
 - stream music to remote devices (laptop, phone, browser)
 - switch modes between speaker and silent (without restarting server)
-- pause / resume / stop / next / interrupt playback
+- pause / resume / stop / next / prev / previous / interrupt playback
 - manage playlists (create, list, show, add, remove, delete, play, queue)
 - adjust volume (including mute/unmute, +N/-N) or loop setting
 - check what is playing, queue status, or streaming listeners

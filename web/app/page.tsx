@@ -25,6 +25,7 @@ export default function Home() {
     volume,
     isLoading,
     togglePlayPause,
+    playPreviousTrack,
     skipTrack,
     stopMusic,
     toggleLoop,
@@ -138,6 +139,7 @@ export default function Home() {
           status={status}
           volume={volume}
           onTogglePlayPause={togglePlayPause}
+          onPlayPrevious={playPreviousTrack}
           onSkipTrack={skipTrack}
           onStopMusic={stopMusic}
           onToggleLoop={toggleLoop}

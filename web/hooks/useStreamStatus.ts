@@ -87,6 +87,11 @@ export function useStreamStatus() {
     }
   }, [status, sendCommand, showToast]);
 
+  const playPreviousTrack = useCallback(() => {
+    sendCommand({ action: "prev" });
+    showToast("Playing previous track...", "info", "skip_previous");
+  }, [sendCommand, showToast]);
+
   const skipTrack = useCallback(() => {
     sendCommand({ action: "skip" });
     showToast("Skipping to next track...", "info", "skip_next");
@@ -260,6 +265,7 @@ export function useStreamStatus() {
     stopLoading,
     sendCommand,
     togglePlayPause,
+    playPreviousTrack,
     skipTrack,
     stopMusic,
     toggleLoop,

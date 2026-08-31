@@ -204,6 +204,61 @@ class PlaybackManager:
 
         return None, False
 
+    def get_previous_track_for_playback(self, loop: bool = True) -> Tuple[Optional[Dict[str, Any]], bool]:
+        """
+        Picks the previous track to play:
+          1. If played tracks exist:
+             - Moves currently playing track (if any) back to 'queued'.
+             - Picks the most recently played track (last track in 'played' status).
+             - Marks it as 'playing' and returns (track, False).
+          2. If NO played tracks exist, but tracks exist:
+             - If loop is True and len(tracks) > 1:
+               - The currently playing track (if any) is marked 'queued'.
+               - Marks all other tracks before the last track as 'played'.
+               - Marks the last track as 'playing' and returns (last_track, True).
+             - Else (or if single track / loop=False):
+               - Returns the current or first track (replaying it).
+        """
+        tracks = self.db.get_tracks()
+        if not tracks:
+            return None, False
+
+        playing = [t for t in tracks if t.get("status") == "playing"]
+        played = [t for t in tracks if t.get("status") == "played"]
+
+        # Case 1: Played tracks exist
+        if played:
+            target_track = played[-1]
+            for t in playing:
+                self.db.update_track_status(t["id"], "queued")
+            self.db.update_track_status(target_track["id"], "playing")
+            self.db.set_setting("last_played_url", target_track["url"])
+            return self.db.get_track_by_id(target_track["id"]), False
+
+        # Case 2: No played tracks, but we have multiple tracks and loop is enabled
+        if loop and len(tracks) > 1:
+            target_track = tracks[-1]
+            for t in tracks:
+                if t["id"] == target_track["id"]:
+                    self.db.update_track_status(t["id"], "playing")
+                elif playing and t["id"] in [p["id"] for p in playing]:
+                    self.db.update_track_status(t["id"], "queued")
+                else:
+                    self.db.update_track_status(t["id"], "played")
+            self.db.set_setting("last_played_url", target_track["url"])
+            return self.db.get_track_by_id(target_track["id"]), True
+
+        # Case 3: Replay currently playing or first track
+        if playing:
+            target = playing[0]
+            self.db.set_setting("last_played_url", target["url"])
+            return self.db.get_track_by_id(target["id"]), False
+
+        target = tracks[0]
+        self.db.update_track_status(target["id"], "playing")
+        self.db.set_setting("last_played_url", target["url"])
+        return self.db.get_track_by_id(target["id"]), False
+
     def shuffle_unplayed_tracks(self) -> str:
         """Shuffles ONLY unplayed tracks, keeping played history intact."""
         tracks = self.db.get_tracks()

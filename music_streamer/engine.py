@@ -367,7 +367,7 @@ class AudioEngine:
                 break
 
             action = cmd.get("action")
-            if action in ["play", "interrupt", "playback_play", "queue_play", "skip", "next"]:
+            if action in ["play", "interrupt", "playback_play", "queue_play", "skip", "next", "prev", "previous", "playback_prev"]:
                 self.last_error = None
 
             if action == "play":
@@ -460,6 +460,28 @@ class AudioEngine:
                     self.track_start_time = None
                     self._sync_runtime_state()
                     print("[AudioEngine] End of playback list")
+
+            elif action in ["prev", "previous", "playback_prev"]:
+                self._stop_decoder()
+                loop_val = self.db.get_setting("loop", default=self.loop)
+                prv, _ = self.playback_mgr.get_previous_track_for_playback(loop=loop_val in ["yes", "1", "true", "on"])
+                if prv:
+                    self.current_url = prv["url"]
+                    self.current_title = prv["title"]
+                    self.current_thumbnail = prv.get("thumbnail") or get_thumbnail_for_url(prv["url"])
+                    self.state = "playing"
+                    self._sync_runtime_state()
+                    print(f"[AudioEngine] Went back to previous track: {self.current_title}")
+                    self.decoder_proc = self._start_decoder(self.current_url)
+                else:
+                    self.state = "stopped"
+                    self._close_alsa_sink()
+                    self.current_url = ""
+                    self.current_title = ""
+                    self.current_thumbnail = ""
+                    self.track_start_time = None
+                    self._sync_runtime_state()
+                    print("[AudioEngine] No previous track available")
 
             elif action in ["interrupt", "playback_play", "queue_play"]:
                 url = cmd.get("url")

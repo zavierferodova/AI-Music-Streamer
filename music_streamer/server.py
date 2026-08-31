@@ -497,6 +497,8 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             engine.post_command({"action": "stop"})
         elif action in ["skip", "next"]:
             engine.post_command({"action": "skip"})
+        elif action in ["prev", "previous", "playback_prev"]:
+            engine.post_command({"action": "prev"})
         elif action in ["interrupt", "playback_play", "queue_play"]:
             url = payload.get("url")
             title = payload.get("title")
@@ -681,6 +683,10 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
         elif path in ["/api/skip", "/api/next"]:
             engine.post_command({"action": "skip"})
             self._send_json({"status": "ok", "action": "skip"})
+
+        elif path in ["/api/prev", "/api/previous", "/api/playback/prev"]:
+            engine.post_command({"action": "prev"})
+            self._send_json({"status": "ok", "action": "prev"})
 
         elif path in ["/api/interrupt", "/api/playback/play", "/api/queue/play"]:
             engine.post_command(
