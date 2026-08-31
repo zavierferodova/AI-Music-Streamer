@@ -55,7 +55,9 @@ class TestCLI(unittest.TestCase):
     def test_loop_parser(self):
         """Verify loop CLI arguments."""
         parser = build_loop_parser()
-        self.assertEqual(parser.parse_args(["yes"]).mode, "yes")
+        self.assertEqual(parser.parse_args(["repeat"]).mode, "repeat")
+        self.assertEqual(parser.parse_args(["repeat-one"]).mode, "repeat-one")
+        self.assertEqual(parser.parse_args(["off"]).mode, "off")
         self.assertEqual(parser.parse_args(["toggle"]).mode, "toggle")
 
     def test_otp_parser(self):

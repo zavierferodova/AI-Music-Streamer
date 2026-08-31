@@ -235,10 +235,20 @@ class TestWebServer(unittest.TestCase):
         self.assertEqual(json.loads(resp.read().decode("utf-8"))["volume"], 65)
 
         # POST /api/loop
-        conn.request("POST", "/api/loop", body=json.dumps({"loop": "no"}), headers=auth_header)
+        conn.request("POST", "/api/loop", body=json.dumps({"loop": "repeat-one"}), headers=auth_header)
         resp = conn.getresponse()
         self.assertEqual(resp.status, 200)
-        self.assertEqual(json.loads(resp.read().decode("utf-8"))["loop"], "no")
+        self.assertEqual(json.loads(resp.read().decode("utf-8"))["loop"], "repeat-one")
+
+        conn.request("POST", "/api/loop", body=json.dumps({"loop": "repeat"}), headers=auth_header)
+        resp = conn.getresponse()
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(json.loads(resp.read().decode("utf-8"))["loop"], "repeat")
+
+        conn.request("POST", "/api/loop", body=json.dumps({"loop": "off"}), headers=auth_header)
+        resp = conn.getresponse()
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(json.loads(resp.read().decode("utf-8"))["loop"], "off")
 
         # POST /api/mode
         conn.request("POST", "/api/mode", body=json.dumps({"mode": "speaker"}), headers=auth_header)

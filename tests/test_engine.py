@@ -83,10 +83,20 @@ class TestEngine(unittest.TestCase):
         self.assertEqual(engine.volume, 65)
         self.assertEqual(self.db.get_int_setting("volume"), 65)
 
-        engine.post_command({"action": "set_loop", "loop": "no"})
+        engine.post_command({"action": "set_loop", "loop": "repeat-one"})
         engine._process_commands()
-        self.assertEqual(engine.loop, "no")
-        self.assertEqual(self.db.get_setting("loop"), "no")
+        self.assertEqual(engine.loop, "repeat-one")
+        self.assertEqual(self.db.get_setting("loop"), "repeat-one")
+
+        engine.post_command({"action": "set_loop", "loop": "repeat"})
+        engine._process_commands()
+        self.assertEqual(engine.loop, "repeat")
+        self.assertEqual(self.db.get_setting("loop"), "repeat")
+
+        engine.post_command({"action": "set_loop", "loop": "off"})
+        engine._process_commands()
+        self.assertEqual(engine.loop, "off")
+        self.assertEqual(self.db.get_setting("loop"), "off")
 
 
 if __name__ == "__main__":

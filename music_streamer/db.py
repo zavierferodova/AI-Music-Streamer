@@ -122,7 +122,7 @@ class DatabaseManager:
             defaults = {
                 "state": "stopped",
                 "volume": "80",
-                "loop": "yes",
+                "loop": "repeat",
                 "mode": "silent",
                 "playback_mode": "ordered",
                 "otp_enabled": "1",

@@ -5,7 +5,7 @@
 
 let currentState = 'stopped';
 let currentMode = 'silent';
-let currentLoop = 'yes';
+let currentLoop = 'repeat';
 let currentPlaybackMode = 'ordered';
 let currentVolume = 80;
 let previousVolume = 80;
@@ -325,9 +325,23 @@ function stopMusic() {
 }
 
 function toggleLoop() {
-  const nextLoop = currentLoop === 'yes' ? 'no' : 'yes';
+  let nextLoop = 'repeat';
+  const cur = (currentLoop || 'repeat').toLowerCase();
+  if (cur === 'repeat' || cur === 'yes' || cur === 'all') {
+    nextLoop = 'repeat-one';
+  } else if (cur === 'repeat-one' || cur === 'one' || cur === 'single') {
+    nextLoop = 'off';
+  } else {
+    nextLoop = 'repeat';
+  }
   sendCommand({ action: 'loop', loop: nextLoop });
-  showToast(nextLoop === 'yes' ? 'Loop: REPEAT (Repeats all tracks continuously)' : 'Loop: ONE-SHOT (Plays once then stops)', 'repeat');
+  if (nextLoop === 'repeat') {
+    showToast('Loop: REPEAT (Loops entire tracklist from first)', 'repeat');
+  } else if (nextLoop === 'repeat-one') {
+    showToast('Loop: REPEAT-ONE (Repeats current song continuously)', 'repeat_one');
+  } else {
+    showToast('Loop: OFF (Plays once then stops)', 'arrow_forward');
+  }
 }
 
 function toggleMode() {
@@ -956,16 +970,35 @@ function applyStatusUpdate(data) {
 
   // Loop Button & Stat
   const loopIcon = document.getElementById('loop-icon');
-  if (currentLoop === 'yes') {
-    loopIcon.innerText = 'repeat';
-    document.getElementById('loop-state-text').innerText = 'REPEAT';
-    document.getElementById('stat-loop').innerText = 'REPEAT';
-    document.getElementById('stat-loop-desc').innerText = 'Full cycle repetition';
+  const loopText = document.getElementById('loop-state-text');
+  const statLoop = document.getElementById('stat-loop');
+  const statLoopDesc = document.getElementById('stat-loop-desc');
+
+  const curL = (currentLoop || 'repeat').toLowerCase();
+  if (curL === 'repeat-one' || curL === 'one' || curL === 'single') {
+    if (loopIcon) loopIcon.innerText = 'repeat_one';
+    if (loopText) loopText.innerText = 'REPEAT-ONE';
+    if (statLoop) {
+      statLoop.innerText = 'REPEAT-ONE';
+      statLoop.style.color = 'var(--accent)';
+    }
+    if (statLoopDesc) statLoopDesc.innerText = 'Repeats single current track';
+  } else if (curL === 'repeat' || curL === 'yes' || curL === 'all') {
+    if (loopIcon) loopIcon.innerText = 'repeat';
+    if (loopText) loopText.innerText = 'REPEAT';
+    if (statLoop) {
+      statLoop.innerText = 'REPEAT';
+      statLoop.style.color = 'var(--primary)';
+    }
+    if (statLoopDesc) statLoopDesc.innerText = 'Loops all tracks from first';
   } else {
-    loopIcon.innerText = 'repeat_one';
-    document.getElementById('loop-state-text').innerText = 'ONE-SHOT';
-    document.getElementById('stat-loop').innerText = 'ONE-SHOT';
-    document.getElementById('stat-loop-desc').innerText = 'Plays once then stops';
+    if (loopIcon) loopIcon.innerText = 'repeat';
+    if (loopText) loopText.innerText = 'OFF';
+    if (statLoop) {
+      statLoop.innerText = 'OFF';
+      statLoop.style.color = 'var(--text-muted)';
+    }
+    if (statLoopDesc) statLoopDesc.innerText = 'Plays once then stops';
   }
 
   // Playback Stats

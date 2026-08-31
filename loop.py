@@ -3,9 +3,10 @@
 loop.py — Get or set loop mode while playing.
 Usage:
   ./loop.py              # show current loop state
-  ./loop.py yes          # enable loop (repeats forever)
-  ./loop.py no           # disable loop (play once, then stop)
-  ./loop.py toggle       # flip current state
+  ./loop.py repeat       # loop entire tracklist from first (by order/shuffle)
+  ./loop.py repeat-one   # repeat single current music continuously
+  ./loop.py off          # disable loop (play once, then stop)
+  ./loop.py toggle       # cycle through repeat -> repeat-one -> off
   ./loop.py status       # alias for show
 """
 

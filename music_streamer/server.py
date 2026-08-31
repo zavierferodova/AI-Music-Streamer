@@ -768,9 +768,19 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
         elif path == "/api/loop":
             loop_val = payload.get("loop", "toggle")
             if loop_val == "toggle":
-                engine.loop = "no" if engine.loop == "yes" else "yes"
+                cur_loop = (engine.loop or engine.db.get_setting("loop", "repeat")).lower()
+                if cur_loop in ["repeat", "yes", "all"]:
+                    engine.loop = "repeat-one"
+                elif cur_loop in ["repeat-one", "repeat_one", "one", "single"]:
+                    engine.loop = "off"
+                else:
+                    engine.loop = "repeat"
+            elif str(loop_val).lower() in ["repeat-one", "repeat_one", "one", "single"]:
+                engine.loop = "repeat-one"
+            elif str(loop_val).lower() in ["repeat", "all", "yes", "1", "true", "on"]:
+                engine.loop = "repeat"
             else:
-                engine.loop = "yes" if loop_val in ["yes", "1", "true", "on"] else "no"
+                engine.loop = "off"
             engine.db.set_setting("loop", engine.loop)
             engine.post_command({"action": "set_loop", "loop": engine.loop})
             self._send_json({"status": "ok", "loop": engine.loop})

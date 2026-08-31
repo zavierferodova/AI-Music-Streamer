@@ -180,7 +180,13 @@ def build_volume_parser() -> argparse.ArgumentParser:
 
 def build_loop_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Get or toggle loop repeat setting")
-    parser.add_argument("mode", nargs="?", choices=["yes", "no", "toggle", "status", "show"], default="status")
+    parser.add_argument(
+        "mode",
+        nargs="?",
+        choices=["repeat", "repeat-one", "off", "yes", "no", "one", "single", "all", "toggle", "status", "show"],
+        default="status",
+        help="Loop mode (repeat, repeat-one, off, toggle, status)",
+    )
     return parser
 
 
@@ -249,7 +255,13 @@ def handle_play(args: argparse.Namespace) -> int:
         elif volume.isdigit():
             vol_int = max(0, min(100, int(volume)))
 
-    loop_clean = "yes" if loop.lower() in ["yes", "y", "true", "on", "1"] else "no"
+    loop_clean = "repeat"
+    if loop.lower() in ["no", "off", "0", "false", "none"]:
+        loop_clean = "off"
+    elif loop.lower() in ["repeat-one", "repeat_one", "one", "single"]:
+        loop_clean = "repeat-one"
+    elif loop.lower() in ["repeat", "all", "yes", "y", "true", "on", "1"]:
+        loop_clean = "repeat"
 
     # Set ALSA Master volume
     set_alsa_volume(vol_int, unmute=True)
@@ -742,30 +754,44 @@ def handle_volume(args: argparse.Namespace) -> int:
 
 
 def handle_loop(args: argparse.Namespace) -> int:
-    mode = args.mode
-    current_loop = db.get_setting("loop", "yes")
+    mode = (args.mode or "status").lower()
+    current_loop = db.get_setting("loop", "repeat").lower()
 
     if mode in ["status", "show"]:
         server_pid = is_server_running()
         print(f"Loop    : {current_loop}")
-        if current_loop == "yes":
-            print("Mode    : repeat (will restart after track ends)")
+        if current_loop in ["repeat-one", "one", "single"]:
+            print("Mode    : repeat-one (repeats single current track continuously)")
+        elif current_loop in ["repeat", "yes", "all"]:
+            print("Mode    : repeat (loops entire tracklist from first by order/shuffle)")
         else:
-            print("Mode    : one-shot (will stop after track ends)")
+            print("Mode    : off (plays until end of list and stops)")
         print(f"Player  : {'running (PID ' + str(server_pid) + ')' if server_pid else 'not running'}")
         return 0
 
-    target = "yes"
-    if mode in ["yes", "on", "1"]:
-        target = "yes"
-    elif mode in ["no", "off", "0"]:
-        target = "no"
+    target = "repeat"
+    if mode in ["repeat-one", "repeat_one", "one", "single"]:
+        target = "repeat-one"
+    elif mode in ["repeat", "all", "yes", "on", "1"]:
+        target = "repeat"
+    elif mode in ["off", "no", "0", "none"]:
+        target = "off"
     elif mode == "toggle":
-        target = "no" if current_loop == "yes" else "yes"
+        if current_loop in ["repeat", "yes", "all"]:
+            target = "repeat-one"
+        elif current_loop in ["repeat-one", "one", "single"]:
+            target = "off"
+        else:
+            target = "repeat"
 
     db.set_setting("loop", target)
     send_ipc_command({"action": "set_loop", "loop": target})
-    print(f"Loop set to: {target}")
+    if target == "repeat":
+        print("Loop mode set to: REPEAT (loops entire tracklist from first by order/shuffle)")
+    elif target == "repeat-one":
+        print("Loop mode set to: REPEAT-ONE (repeats single current track continuously)")
+    else:
+        print("Loop mode set to: OFF (one-shot, stops after list ends)")
     return 0
 
 
@@ -821,7 +847,7 @@ def handle_otp(args: argparse.Namespace) -> int:
 def handle_status(args: argparse.Namespace) -> int:
     state = db.get_setting("state", "stopped")
     vol = db.get_setting("volume", "80")
-    loop_val = db.get_setting("loop", "yes")
+    loop_val = db.get_setting("loop", "repeat")
     cur_url = db.get_setting("current_url", "")
     cur_title = db.get_setting("current_title", cur_url or "Nothing playing")
     mode = db.get_setting("mode", "silent")
@@ -865,7 +891,8 @@ def handle_status(args: argparse.Namespace) -> int:
     if cur_url and cur_url != cur_title:
         print(f"   URL          : {cur_url}")
     print(f"🔊 Volume       : {vol}%")
-    print(f"🔁 Loop         : {loop_val} ({'repeat' if loop_val == 'yes' else 'one-shot'})")
+    loop_desc = "repeat (full cycle)" if loop_val in ["repeat", "yes", "all"] else ("repeat-one (single song)" if loop_val in ["repeat-one", "one", "single"] else "off")
+    print(f"🔁 Loop         : {loop_val} ({loop_desc})")
 
     total = playback_state.get("total_count", 0)
     played = playback_state.get("played_count", 0)

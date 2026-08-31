@@ -39,7 +39,7 @@ All audio is decoded from YouTube (or SoundCloud/Bandcamp) via `yt-dlp` → `ffm
 | `~/music-streamer/pause.py` | Pause: mutes ALSA speaker and streams silence to clients |
 | `~/music-streamer/resume.py` | Resume: unmutes ALSA speaker and resumes audio stream in sync |
 | `~/music-streamer/volume.py` | Get/set/mute/unmute volume (synced with Master: `+N`/`-N`, `mute`, `unmute`, absolute `0-100`) |
-| `~/music-streamer/loop.py` | Live toggle loop: `[yes\|no\|toggle\|status]` — takes effect after current track |
+| `~/music-streamer/loop.py` | Live toggle loop: `[repeat|repeat-one|off|toggle|status]` (`repeat`=all tracks in order/shuffle, `repeat-one`=single track) |
 | `~/music-streamer/otp.py` | One-Time Password (OTP) security manager: `show`, `new`, `on`, `off`, `sessions` |
 | `~/music-streamer/status.py` | Show player state, now playing, volume, loop, queue, next track, stream server info (`--json`) |
 | `~/music-streamer/stop.py` | Stop playback (stream switches to silence; use `--all` to stop the daemon server) |

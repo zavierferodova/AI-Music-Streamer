@@ -486,9 +486,20 @@ class AudioEngine:
             elif action == "set_loop":
                 loop_val = cmd.get("loop", "toggle")
                 if loop_val == "toggle":
-                    self.loop = "no" if self.loop == "yes" else "yes"
+                    cur = (self.loop or self.db.get_setting("loop", "repeat")).lower()
+                    if cur in ["repeat", "yes", "all"]:
+                        self.loop = "repeat-one"
+                    elif cur in ["repeat-one", "repeat_one", "one", "single"]:
+                        self.loop = "off"
+                    else:
+                        self.loop = "repeat"
+                elif str(loop_val).lower() in ["repeat-one", "repeat_one", "one", "single"]:
+                    self.loop = "repeat-one"
+                elif str(loop_val).lower() in ["repeat", "all", "yes", "1", "true", "on"]:
+                    self.loop = "repeat"
                 else:
-                    self.loop = "yes" if loop_val in ["yes", "1", "true", "on"] else "no"
+                    self.loop = "off"
+                self.db.set_setting("loop", self.loop)
                 print(f"[AudioEngine] Loop set to: {self.loop}")
                 self._sync_runtime_state()
 
@@ -543,12 +554,17 @@ class AudioEngine:
                     # Decoder reached EOF / finished track
                     print(f"[AudioEngine] Track finished: {self.current_title}")
                     self._stop_decoder()
-                    self.playback_mgr.mark_current_finished()
 
-                    loop_val = self.db.get_setting("loop", default=self.loop)
-                    nxt, is_new_cycle = self.playback_mgr.get_next_track_for_playback(
-                        loop=loop_val in ["yes", "1", "true", "on"]
-                    )
+                    loop_val = str(self.db.get_setting("loop", default=self.loop)).lower()
+                    if loop_val in ["repeat-one", "repeat_one", "one", "single"] and self.current_url:
+                        print(f"[AudioEngine] Repeat-One active — Replaying: {self.current_title}")
+                        self._sync_runtime_state()
+                        self.decoder_proc = self._start_decoder(self.current_url)
+                        continue
+
+                    self.playback_mgr.mark_current_finished()
+                    is_loop_all = loop_val in ["repeat", "all", "yes", "1", "true", "on"]
+                    nxt, is_new_cycle = self.playback_mgr.get_next_track_for_playback(loop=is_loop_all)
                     if nxt:
                         self.current_url = nxt["url"]
                         self.current_title = nxt["title"]
