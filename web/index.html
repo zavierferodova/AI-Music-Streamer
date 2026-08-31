@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#070b12">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="Music Streamer — Continuous 24/7 Live Broadcast & Synchronized Audio Control Panel">
+  <title>Music Streamer — Realtime Control Panel</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Top Navigation Bar -->
+    <header class="top-bar">
+      <div class="brand">
+        <div class="brand-icon">
+          <span class="material-symbols-rounded">graphic_eq</span>
+        </div>
+        <div>
+          <h1 class="brand-title">Music Streamer</h1>
+          <div class="brand-sub">Live Broadcast & Synced Audio</div>
+        </div>
+      </div>
+      <div class="top-meta">
+        <div class="badge badge-security" id="badge-security" title="Security Status" onclick="openLockModal()">
+          <span class="material-symbols-rounded">lock</span>
+          <span id="security-status-text">OTP Protected</span>
+        </div>
+        <div class="badge badge-live">
+          <div class="live-dot" id="live-dot-indicator"></div>
+          <span id="live-indicator">CONNECTING (WS)...</span>
+        </div>
+        <div class="badge badge-listeners">
+          <span class="material-symbols-rounded">group</span>
+          <span><span id="client-count-badge">0</span> Listeners</span>
+        </div>
+        <div class="badge badge-uptime">
+          <span class="material-symbols-rounded">schedule</span>
+          <span id="uptime-badge">00:00:00</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Hero Now Playing Card with Thumbnail -->
+    <main class="hero-card">
+      <div class="now-playing-header">
+        <div class="section-label">
+          <span class="material-symbols-rounded">equalizer</span>
+          <span>NOW PLAYING</span>
+        </div>
+        <div class="visualizer active" id="visualizer">
+          <div class="v-bar"></div>
+          <div class="v-bar"></div>
+          <div class="v-bar"></div>
+          <div class="v-bar"></div>
+          <div class="v-bar"></div>
+        </div>
+      </div>
+
+      <div class="hero-main">
+        <!-- Thumbnail Artwork Box -->
+        <div class="hero-artwork-box" id="artwork-container">
+          <img id="now-playing-thumb" class="hero-artwork-img" src="{{TRACK_THUMBNAIL}}" alt="Track Thumbnail" onerror="this.style.display='none'; var f=document.getElementById('now-playing-thumb-fallback'); if(f) f.style.display='flex';">
+          <div id="now-playing-thumb-fallback" class="hero-artwork-fallback" style="display: none;">
+            <span class="material-symbols-rounded">music_note</span>
+          </div>
+        </div>
+
+        <div class="hero-details">
+          <h2 class="track-title" id="track-title">{{TRACK_TITLE}}</h2>
+
+          <div class="track-url-box">
+            <span class="material-symbols-rounded">link</span>
+            <a id="track-url-link" href="{{TRACK_URL}}" target="_blank" rel="noopener noreferrer">{{TRACK_URL_DISPLAY}}</a>
+            <button class="btn-copy" onclick="copyStreamLink()">
+              <span class="material-symbols-rounded">content_copy</span>
+              <span>Copy URL</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Interactive Controls -->
+      <div class="controls-bar">
+        <button class="btn btn-primary" id="btn-play-pause" onclick="togglePlayPause()">
+          <span class="material-symbols-rounded" id="play-pause-icon">pause</span>
+          <span id="play-pause-text">Pause</span>
+        </button>
+        <button class="btn btn-secondary" onclick="skipTrack()">
+          <span class="material-symbols-rounded">skip_next</span>
+          <span>Skip Next</span>
+        </button>
+        <button class="btn btn-secondary" id="btn-loop-toggle" onclick="toggleLoop()">
+          <span class="material-symbols-rounded" id="loop-icon">repeat</span>
+          <span>Loop: <strong id="loop-state-text">REPEAT</strong></span>
+        </button>
+        <button class="btn btn-secondary" id="btn-mode-toggle" onclick="toggleMode()">
+          <span class="material-symbols-rounded" id="mode-icon">volume_off</span>
+          <span>Mode: <strong id="mode-state-text">SILENT</strong></span>
+        </button>
+        <button class="btn btn-danger" onclick="stopMusic()">
+          <span class="material-symbols-rounded">stop</span>
+          <span>Stop</span>
+        </button>
+      </div>
+
+      <!-- Server Master Volume Control Bar -->
+      <div class="server-volume-container" aria-label="Server Volume Control">
+        <div class="volume-header">
+          <div class="volume-label">
+            <button class="btn-icon-mute" id="btn-volume-mute" title="Toggle Mute Server Speaker" onclick="toggleMuteVolume()">
+              <span class="material-symbols-rounded" id="volume-icon">volume_up</span>
+            </button>
+            <span class="volume-title">Server Master Volume</span>
+          </div>
+          <div class="volume-badge-box">
+            <span class="volume-badge" id="server-volume-badge">80%</span>
+          </div>
+        </div>
+
+        <div class="volume-slider-row">
+          <button class="btn-vol-step" title="Decrease volume (-5%)" onclick="stepVolume(-5)">
+            <span class="material-symbols-rounded">remove</span>
+          </button>
+          <div class="slider-track-wrap">
+            <input 
+              type="range" 
+              id="server-volume-slider" 
+              class="server-volume-slider" 
+              min="0" 
+              max="100" 
+              value="80" 
+              aria-label="Server Master Volume Slider"
+              oninput="onVolumeSliderInput(this.value)"
+              onchange="onVolumeSliderChange(this.value)"
+            >
+          </div>
+          <button class="btn-vol-step" title="Increase volume (+5%)" onclick="stepVolume(5)">
+            <span class="material-symbols-rounded">add</span>
+          </button>
+        </div>
+
+        <div class="volume-presets-row">
+          <button class="preset-pill" onclick="setVolumePreset(0)">Mute</button>
+          <button class="preset-pill" onclick="setVolumePreset(25)">25%</button>
+          <button class="preset-pill" onclick="setVolumePreset(50)">50%</button>
+          <button class="preset-pill" onclick="setVolumePreset(75)">75%</button>
+          <button class="preset-pill" onclick="setVolumePreset(100)">100%</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Music Status Grid -->
+    <section class="status-grid" aria-label="Music Status Metrics">
+      <div class="stat-card">
+        <div class="stat-label">
+          <span class="material-symbols-rounded">play_circle</span>
+          <span>Playback State</span>
+        </div>
+        <div class="stat-value" id="stat-state" style="color: var(--emerald);">PLAYING</div>
+        <div class="stat-desc" id="stat-state-desc">Audio decoding active</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">
+          <span class="material-symbols-rounded">volume_up</span>
+          <span>Server Volume</span>
+        </div>
+        <div class="stat-value" id="stat-volume-val">80%</div>
+        <div class="stat-desc" id="stat-volume-desc">ALSA Master Synced</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">
+          <span class="material-symbols-rounded">sensors</span>
+          <span>Broadcast Mode</span>
+        </div>
+        <div class="stat-value" id="stat-mode">SILENT</div>
+        <div class="stat-desc" id="stat-mode-desc">HTTP stream broadcast only</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">
+          <span class="material-symbols-rounded">repeat</span>
+          <span>Loop Setting</span>
+        </div>
+        <div class="stat-value" id="stat-loop">REPEAT</div>
+        <div class="stat-loop" id="stat-loop-desc" style="font-size: 0.78rem; color: var(--text-muted); margin-top: 4px;">Full cycle repetition</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">
+          <span class="material-symbols-rounded">queue_music</span>
+          <span>Playback Tracklist</span>
+        </div>
+        <div class="stat-value" id="stat-playback-count">0 Tracks</div>
+        <div class="stat-desc" id="stat-playback-summary">0 played, 0 upcoming</div>
+      </div>
+      <div class="stat-card stat-card-wide">
+        <div class="stat-label">
+          <span class="material-symbols-rounded">upcoming</span>
+          <span>Next Up in Playback</span>
+        </div>
+        <div class="stat-value" id="stat-next-title" style="font-size: 1rem;">None (End of list)</div>
+        <div class="stat-desc" id="stat-next-url">—</div>
+      </div>
+    </section>
+
+    <!-- Live Stream Audio Player Box -->
+    <section class="stream-player-box" aria-label="Live Audio Stream">
+      <div class="stream-info">
+        <button class="audio-btn" id="stream-audio-btn" aria-label="Toggle Live Stream Audio" onclick="toggleStreamAudio()">
+          <span class="material-symbols-rounded" id="stream-audio-icon">play_arrow</span>
+        </button>
+        <div>
+          <div style="font-weight: 700; font-size: 1rem;">Listen Live Stream</div>
+          <div style="font-size: 0.82rem; color: var(--text-muted);" id="stream-audio-status">Continuous MP3 Broadcast (24/7)</div>
+        </div>
+      </div>
+      <div class="stream-actions">
+        <a href="/stream.mp3" target="_blank" class="btn btn-secondary" style="padding: 10px 14px; font-size: 0.85rem;">
+          <span class="material-symbols-rounded">open_in_new</span>
+          <span>Direct Stream URL</span>
+        </a>
+        <button class="btn btn-secondary" style="padding: 10px 14px; font-size: 0.85rem;" onclick="copyDirectStreamLink()">
+          <span class="material-symbols-rounded">content_copy</span>
+          <span>Copy Link</span>
+        </button>
+      </div>
+      <audio id="browser-audio" src="/stream.mp3" preload="none"></audio>
+    </section>
+
+    <!-- Playback Tracklist Section with History (Played, Playing, Upcoming) -->
+    <section class="playback-card" aria-label="Playback List">
+      <div class="playback-header">
+        <div class="playback-title">
+          <span class="material-symbols-rounded">queue_music</span>
+          <span>Playback List</span>
+          <span class="badge badge-listeners" id="playback-badge-count">0</span>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button class="btn btn-secondary" id="btn-playback-mode-toggle" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="togglePlaybackMode()">
+            <span class="material-symbols-rounded" id="playback-mode-btn-icon">format_list_numbered</span>
+            <span id="playback-mode-btn-text">Ordered</span>
+          </button>
+          <button class="btn btn-secondary" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="resetPlaybackHistory()" title="Reset played tracks for fresh replay">
+            <span class="material-symbols-rounded">restart_alt</span>
+            <span>Replay All</span>
+          </button>
+          <button class="btn btn-secondary" style="padding: 8px 14px; font-size: 0.82rem; min-height: 36px;" onclick="clearPlaybackList()">
+            <span class="material-symbols-rounded">delete_sweep</span>
+            <span>Clear List</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Summary Pills -->
+      <div class="playback-summary-pills" id="playback-summary-pills">
+        <div class="pill pill-playing"><span class="material-symbols-rounded">play_circle</span> <span id="pill-playing-count">0 Playing</span></div>
+        <div class="pill pill-queued"><span class="material-symbols-rounded">schedule</span> <span id="pill-queued-count">0 Upcoming</span></div>
+        <div class="pill pill-played"><span class="material-symbols-rounded">done_all</span> <span id="pill-played-count">0 Played</span></div>
+      </div>
+
+      <ul class="playback-list" id="playback-list-container">
+        <div class="playback-empty">Playback list is currently empty. Add tracks below or use <code>./playback.py add</code></div>
+      </ul>
+
+      <!-- Quick Add / Interrupt Play Input -->
+      <div class="quick-input-box">
+        <input type="text" id="quick-url-input" class="input-field" placeholder="Paste YouTube URL or song name..." onkeydown="if(event.key==='Enter') quickAddPlayback()">
+        <button class="btn btn-primary" onclick="quickAddPlayback()">
+          <span class="material-symbols-rounded">playlist_add</span>
+          <span>Add to List</span>
+        </button>
+        <button class="btn btn-accent" onclick="quickInterruptPlay()">
+          <span class="material-symbols-rounded">bolt</span>
+          <span>Play Now</span>
+        </button>
+      </div>
+    </section>
+  </div>
+
+  <!-- Security Lock Screen Modal (Glassmorphic OTP Input) -->
+  <div class="lock-overlay" id="lock-screen-modal">
+    <div class="lock-card" id="lock-card-box">
+      <div class="lock-icon-box">
+        <span class="material-symbols-rounded" id="lock-state-icon">lock</span>
+      </div>
+      <h2 class="lock-title">Passcode Required</h2>
+      <p class="lock-subtitle">Enter the 6-digit One-Time Password (OTP) displayed in your server console or run <code>./otp.py</code></p>
+
+      <div class="otp-input-group" id="otp-inputs">
+        <input type="password" maxlength="1" class="otp-digit" inputmode="numeric" autocomplete="one-time-code">
+        <input type="password" maxlength="1" class="otp-digit" inputmode="numeric">
+        <input type="password" maxlength="1" class="otp-digit" inputmode="numeric">
+        <input type="password" maxlength="1" class="otp-digit" inputmode="numeric">
+        <input type="password" maxlength="1" class="otp-digit" inputmode="numeric">
+        <input type="password" maxlength="1" class="otp-digit" inputmode="numeric">
+      </div>
+
+      <div class="lock-error" id="lock-error-msg"></div>
+
+      <button class="btn btn-primary" style="width: 100%;" onclick="submitOTP()">
+        <span class="material-symbols-rounded">key</span>
+        <span>Unlock Control Panel</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toast">
+    <span class="material-symbols-rounded" id="toast-icon">check_circle</span>
+    <span id="toast-msg">Copied to clipboard</span>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

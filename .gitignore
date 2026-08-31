@@ -1,0 +1,26 @@
+# Python Virtual Environment
+.venv/
+env/
+venv/
+
+# Python Bytecode & Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Runtime Database & Ephemeral State
+runtime/*.db
+runtime/*.db-wal
+runtime/*.db-shm
+runtime/*.log
+runtime/*.sock
+runtime/*.pid
+!runtime/.gitkeep
+
+# System & OS Logs
+*.log
+.DS_Store
