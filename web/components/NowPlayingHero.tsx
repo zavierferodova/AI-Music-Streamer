@@ -73,11 +73,11 @@ export function NowPlayingHero({
 
   return (
     <main
-      className="w-full rounded-3xl bg-slate-900/80 border border-slate-700/60 p-6 shadow-2xl backdrop-blur-xl transition-all"
+      className="w-full rounded-3xl bg-slate-900/80 border border-slate-700/60 p-4 sm:p-6 shadow-2xl backdrop-blur-xl transition-all"
       id="hero-now-playing-card"
     >
       {/* Header bar */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+      <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-slate-800">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-sky-400 animate-ping" />
           <span className="text-xs font-bold text-slate-300 uppercase tracking-widest">
@@ -125,9 +125,9 @@ export function NowPlayingHero({
       </div>
 
       {/* Main artwork & track info */}
-      <div className="flex flex-col sm:flex-row items-center gap-6 my-6">
+      <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 my-4 sm:my-6">
         {/* Artwork Thumbnail Box */}
-        <div className="relative w-36 h-36 sm:w-40 sm:h-40 rounded-2xl overflow-hidden bg-slate-800 border border-slate-700/80 shadow-xl shrink-0 group">
+        <div className="relative w-32 h-32 sm:w-40 sm:h-40 rounded-2xl overflow-hidden bg-slate-800 border border-slate-700/80 shadow-xl shrink-0 group">
           {thumbUrl && !imgError ? (
             <img
               src={thumbUrl}
@@ -150,14 +150,14 @@ export function NowPlayingHero({
         </div>
 
         {/* Track Title & Metadata */}
-        <div className="flex-1 min-w-0 text-center sm:text-left space-y-2.5">
-          <h2 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight leading-tight line-clamp-2">
+        <div className="flex-1 min-w-0 text-center sm:text-left space-y-2">
+          <h2 className="text-lg sm:text-2xl font-extrabold text-white tracking-tight leading-tight line-clamp-2">
             {display.title}
           </h2>
 
           <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap text-xs text-slate-400">
             {rawUrl ? (
-              <div className="flex items-center gap-1.5 max-w-md bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700/60">
+              <div className="flex items-center gap-1.5 max-w-full bg-slate-800/80 px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-700/60 text-[11px] sm:text-xs">
                 <LinkIcon className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 <a
                   href={rawUrl}
@@ -184,40 +184,40 @@ export function NowPlayingHero({
       </div>
 
       {/* Control Buttons Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-6 gap-2.5">
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-2.5">
         {/* Previous Button */}
         <button
           onClick={onPlayPrevious}
-          className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 text-xs font-semibold transition-all hover:scale-105 active:scale-95"
+          className="flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2.5 sm:py-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 text-xs font-semibold transition-all hover:scale-105 active:scale-95 min-h-[44px]"
           title="Play Previous Track"
         >
-          <SkipBack className="w-4 h-4 text-slate-300" />
-          <span>Previous</span>
+          <SkipBack className="w-4 h-4 text-slate-300 shrink-0" />
+          <span className="truncate">Previous</span>
         </button>
 
         {/* Play/Pause Button */}
         <button
           onClick={onTogglePlayPause}
-          className="col-span-2 sm:col-span-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-semibold text-sm shadow-lg shadow-sky-500/25 transition-all hover:scale-105 active:scale-95"
+          className="flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 sm:py-3 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-sky-500/25 transition-all hover:scale-105 active:scale-95 min-h-[44px]"
         >
-          {isPlaying ? <Pause className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-white" />}
-          <span>{isPlaying ? "Pause" : isPaused ? "Resume" : "Play"}</span>
+          {isPlaying ? <Pause className="w-4 h-4 fill-white shrink-0" /> : <Play className="w-4 h-4 fill-white shrink-0" />}
+          <span className="truncate">{isPlaying ? "Pause" : isPaused ? "Resume" : "Play"}</span>
         </button>
 
         {/* Skip Next */}
         <button
           onClick={onSkipTrack}
-          className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 text-xs font-semibold transition-all hover:scale-105 active:scale-95"
+          className="flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2.5 sm:py-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 text-xs font-semibold transition-all hover:scale-105 active:scale-95 min-h-[44px]"
           title="Skip to Next Track"
         >
-          <SkipForward className="w-4 h-4 text-slate-300" />
-          <span>Next</span>
+          <SkipForward className="w-4 h-4 text-slate-300 shrink-0" />
+          <span className="truncate">Next</span>
         </button>
 
         {/* Loop Toggle */}
         <button
           onClick={onToggleLoop}
-          className={`flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl border text-xs font-semibold transition-all hover:scale-105 active:scale-95 ${
+          className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2.5 sm:py-3 rounded-2xl border text-xs font-semibold transition-all hover:scale-105 active:scale-95 min-h-[44px] ${
             loopMode === "repeat-one" || loopMode === "one"
               ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40"
               : loopMode === "repeat" || loopMode === "yes"
@@ -226,12 +226,12 @@ export function NowPlayingHero({
           }`}
         >
           {loopMode === "repeat-one" || loopMode === "one" ? (
-            <Repeat1 className="w-4 h-4 text-indigo-400" />
+            <Repeat1 className="w-4 h-4 text-indigo-400 shrink-0" />
           ) : (
-            <Repeat className="w-4 h-4" />
+            <Repeat className="w-4 h-4 shrink-0" />
           )}
-          <span>
-            Loop:{" "}
+          <span className="truncate">
+            <span className="hidden sm:inline">Loop: </span>
             <strong>
               {loopMode === "repeat-one" || loopMode === "one"
                 ? "ONE"
@@ -245,29 +245,30 @@ export function NowPlayingHero({
         {/* Broadcast Mode Toggle */}
         <button
           onClick={onToggleMode}
-          className={`flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl border text-xs font-semibold transition-all hover:scale-105 active:scale-95 ${
+          className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2.5 sm:py-3 rounded-2xl border text-xs font-semibold transition-all hover:scale-105 active:scale-95 min-h-[44px] ${
             broadcastMode === "speaker"
               ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
               : "bg-slate-800/80 text-slate-300 border-slate-700"
           }`}
         >
           {broadcastMode === "speaker" ? (
-            <Volume2 className="w-4 h-4 text-emerald-400" />
+            <Volume2 className="w-4 h-4 text-emerald-400 shrink-0" />
           ) : (
-            <VolumeX className="w-4 h-4 text-slate-400" />
+            <VolumeX className="w-4 h-4 text-slate-400 shrink-0" />
           )}
-          <span>
-            Mode: <strong>{broadcastMode.toUpperCase()}</strong>
+          <span className="truncate">
+            <span className="hidden sm:inline">Mode: </span>
+            <strong>{broadcastMode.toUpperCase()}</strong>
           </span>
         </button>
 
         {/* Stop Button */}
         <button
           onClick={onStopMusic}
-          className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-semibold transition-all hover:scale-105 active:scale-95"
+          className="flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2.5 sm:py-3 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-semibold transition-all hover:scale-105 active:scale-95 min-h-[44px]"
         >
-          <Square className="w-3.5 h-3.5 fill-rose-400" />
-          <span>Stop</span>
+          <Square className="w-3.5 h-3.5 fill-rose-400 shrink-0" />
+          <span className="truncate">Stop</span>
         </button>
       </div>
 

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { ServerStatus } from "@/types";
 import { formatTrackDisplay } from "@/lib/utils";
+import { ConfirmationModal } from "./ConfirmationModal";
 
 interface PlaybackListProps {
   status: ServerStatus | null;
@@ -46,6 +47,8 @@ export function PlaybackList({
   onSaveToPlaylist,
 }: PlaybackListProps) {
   const [quickInput, setQuickInput] = useState("");
+  const [trackToDelete, setTrackToDelete] = useState<{ index: number; title: string } | null>(null);
+  const [isConfirmClearOpen, setIsConfirmClearOpen] = useState(false);
 
   const playback = status?.playback;
   const tracks = playback?.tracks || [];
@@ -113,7 +116,7 @@ export function PlaybackList({
 
           {/* Clear List */}
           <button
-            onClick={onClearList}
+            onClick={() => setIsConfirmClearOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-rose-500/20 border border-slate-700 hover:border-rose-500/40 text-xs font-semibold text-slate-400 hover:text-rose-300 transition-all hover:scale-105"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -149,9 +152,7 @@ export function PlaybackList({
             const status = track.status || "queued";
             const display = formatTrackDisplay(track.title, track.url);
             const thumb = track.thumbnail;
-
-            const isNext = status === "queued" && upcomingIndex === 1;
-            if (status === "queued") upcomingIndex++;
+            const isNext = status === "queued" && track.status !== "played" && tracks.findIndex(t => t.status !== "played") === idx;
 
             return (
               <div
@@ -181,17 +182,15 @@ export function PlaybackList({
                   ) : (
                     <span
                       className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold shrink-0 ${
-                        isNext
-                          ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                          : "bg-slate-800 text-slate-300"
+                        isNext ? "bg-amber-500/20 text-amber-300" : "bg-slate-800 text-slate-400"
                       }`}
                     >
                       <Clock className="w-3 h-3" />
-                      <span>#{upcomingIndex - 1}{isNext ? " NEXT" : ""}</span>
+                      <span>{isNext ? "NEXT" : `#${idx + 1}`}</span>
                     </span>
                   )}
 
-                  {/* Thumbnail */}
+                  {/* Thumbnail Preview */}
                   {thumb ? (
                     <img
                       src={thumb}
@@ -200,30 +199,23 @@ export function PlaybackList({
                     />
                   ) : (
                     <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 shrink-0 border border-slate-700">
-                      <Music2 className="w-5 h-5" />
+                      <Music2 className="w-4 h-4" />
                     </div>
                   )}
 
-                  {/* Info */}
+                  {/* Title & Info */}
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold text-white truncate">{display.title}</div>
-                    {display.url && (
-                      <div className="text-[11px] text-slate-400 truncate mt-0.5">{display.url}</div>
-                    )}
+                    <div className="text-xs font-semibold text-white truncate">{display.title}</div>
+                    <div className="text-[10px] text-slate-400 truncate mt-0.5">
+                      {display.url || "Audio track"}
+                    </div>
                   </div>
                 </div>
 
-                {/* Actions */}
+                {/* Track Actions */}
                 <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
                   {status === "playing" ? (
-                    <button
-                      onClick={() => onPlayTrack(idx)}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 text-xs font-semibold border border-sky-500/40 transition-all"
-                      title="Restart playback"
-                    >
-                      <RotateCw className="w-3.5 h-3.5" />
-                      <span>Restart</span>
-                    </button>
+                    <span className="text-[11px] text-emerald-400 font-semibold px-2">Active</span>
                   ) : status === "played" ? (
                     <button
                       onClick={() => onPlayTrack(idx)}
@@ -252,7 +244,7 @@ export function PlaybackList({
                     <BookmarkPlus className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => onRemoveTrack(idx)}
+                    onClick={() => setTrackToDelete({ index: idx, title: display.title })}
                     className="p-1.5 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
                     title="Remove track"
                   >
@@ -305,6 +297,33 @@ export function PlaybackList({
             <span>This track is already in the playback list.</span>
           </div>
         )}
+
+      {/* Confirmation Dialogs */}
+      <ConfirmationModal
+        isOpen={trackToDelete !== null}
+        title="Remove Track from Playback"
+        message={`Are you sure you want to remove "${trackToDelete?.title}" from the playback list?`}
+        confirmLabel="Remove"
+        onConfirm={() => {
+          if (trackToDelete !== null) {
+            onRemoveTrack(trackToDelete.index);
+            setTrackToDelete(null);
+          }
+        }}
+        onClose={() => setTrackToDelete(null)}
+      />
+
+      <ConfirmationModal
+        isOpen={isConfirmClearOpen}
+        title="Clear Playback List"
+        message="Are you sure you want to clear the entire playback list? All unplayed tracks will be removed."
+        confirmLabel="Clear All"
+        onConfirm={() => {
+          onClearList();
+          setIsConfirmClearOpen(false);
+        }}
+        onClose={() => setIsConfirmClearOpen(false)}
+      />
     </section>
   );
 }

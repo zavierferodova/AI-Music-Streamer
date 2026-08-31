@@ -27,6 +27,8 @@ import {
 } from "@/lib/api";
 import { formatTrackDisplay, matchesSearchQuery } from "@/lib/utils";
 import { useToast } from "@/hooks/useToast";
+import { ConfirmationModal } from "./ConfirmationModal";
+import { PromptInputModal } from "./PromptInputModal";
 
 interface PlaylistExplorerProps {
   playlists: Playlist[];
@@ -50,6 +52,10 @@ export function PlaylistExplorer({
   const [trackSearchFilter, setTrackSearchFilter] = useState("");
   const [newTrackInput, setNewTrackInput] = useState("");
   const [loadingTracks, setLoadingTracks] = useState(false);
+  const [trackToDelete, setTrackToDelete] = useState<{ index: number; title: string } | null>(null);
+  const [playlistToDelete, setPlaylistToDelete] = useState<string | null>(null);
+  const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   // Auto-select first playlist if none selected
   useEffect(() => {
@@ -92,48 +98,47 @@ export function PlaylistExplorer({
   }, [selectedPlaylistName, loadPlaylistDetails]);
 
   // Actions
-  const handleCreateNewPlaylist = async () => {
-    const name = window.prompt("Enter a name for the new playlist:");
-    if (!name || !name.trim()) return;
-    const clean = name.trim();
-    const ok = await createPlaylist(clean);
+  const handleCreateNewPlaylist = () => {
+    setIsCreateModalOpen(true);
+  };
+
+  const executeCreatePlaylist = async (name: string) => {
+    const ok = await createPlaylist(name);
     if (ok) {
-      showToast(`Created playlist "${clean}"`, "success", "library_add");
-      setSelectedPlaylistName(clean);
+      showToast(`Created playlist "${name}"`, "success", "library_add");
+      setSelectedPlaylistName(name);
       onRefreshStatus();
     } else {
       showToast("Failed to create playlist", "error", "error_outline");
     }
   };
 
-  const handleRenamePlaylist = async () => {
+  const handleRenamePlaylist = () => {
     if (!selectedPlaylistName) return;
-    const newName = window.prompt(`Rename playlist "${selectedPlaylistName}" to:`, selectedPlaylistName);
-    if (!newName || !newName.trim() || newName.trim() === selectedPlaylistName) return;
-    const clean = newName.trim();
-    const ok = await renamePlaylist(selectedPlaylistName, clean);
+    setIsRenameModalOpen(true);
+  };
+
+  const executeRenamePlaylist = async (newName: string) => {
+    if (!selectedPlaylistName || newName === selectedPlaylistName) return;
+    const ok = await renamePlaylist(selectedPlaylistName, newName);
     if (ok) {
-      showToast(`Renamed playlist to "${clean}"`, "success", "edit");
-      setSelectedPlaylistName(clean);
+      showToast(`Renamed playlist to "${newName}"`, "success", "edit");
+      setSelectedPlaylistName(newName);
       onRefreshStatus();
     } else {
       showToast("Failed to rename playlist", "error", "error_outline");
     }
   };
 
-  const handleDeletePlaylist = async () => {
-    if (!selectedPlaylistName) return;
-    if (window.confirm(`Are you sure you want to delete playlist "${selectedPlaylistName}"?`)) {
-      const target = selectedPlaylistName;
-      const ok = await deletePlaylist(target);
-      if (ok) {
-        showToast(`Deleted playlist "${target}"`, "info", "delete");
-        setSelectedPlaylistName(null);
-        setActivePlaylistData(null);
-        onRefreshStatus();
-      } else {
-        showToast("Failed to delete playlist", "error", "error_outline");
-      }
+  const executeDeletePlaylist = async (target: string) => {
+    const ok = await deletePlaylist(target);
+    if (ok) {
+      showToast(`Deleted playlist "${target}"`, "info", "delete");
+      setSelectedPlaylistName(null);
+      setActivePlaylistData(null);
+      onRefreshStatus();
+    } else {
+      showToast("Failed to delete playlist", "error", "error_outline");
     }
   };
 
@@ -317,7 +322,7 @@ export function PlaylistExplorer({
                     <span>Queue</span>
                   </button>
                   <button
-                    onClick={handleDeletePlaylist}
+                    onClick={() => setPlaylistToDelete(activePlaylistData.name)}
                     className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-all hover:scale-105"
                     title="Delete playlist"
                   >
@@ -397,7 +402,7 @@ export function PlaylistExplorer({
                             <span>Play</span>
                           </button>
                           <button
-                            onClick={() => handleRemoveTrack(idx)}
+                            onClick={() => setTrackToDelete({ index: idx, title: display.title })}
                             className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
                             title="Remove from playlist"
                           >
@@ -439,6 +444,61 @@ export function PlaylistExplorer({
           )}
         </div>
       </div>
+
+      {/* Confirmation Dialogs */}
+      <ConfirmationModal
+        isOpen={trackToDelete !== null}
+        title="Remove Track from Playlist"
+        message={`Are you sure you want to remove "${trackToDelete?.title}" from "${selectedPlaylistName}"?`}
+        confirmLabel="Remove"
+        onConfirm={() => {
+          if (trackToDelete !== null) {
+            handleRemoveTrack(trackToDelete.index);
+            setTrackToDelete(null);
+          }
+        }}
+        onClose={() => setTrackToDelete(null)}
+      />
+
+      <ConfirmationModal
+        isOpen={playlistToDelete !== null}
+        title="Delete Playlist"
+        message={`Are you sure you want to delete playlist "${playlistToDelete}"? All tracks in this collection will be removed.`}
+        confirmLabel="Delete Playlist"
+        onConfirm={() => {
+          if (playlistToDelete !== null) {
+            executeDeletePlaylist(playlistToDelete);
+            setPlaylistToDelete(null);
+          }
+        }}
+        onClose={() => setPlaylistToDelete(null)}
+      />
+
+      {/* Rename Playlist Modal */}
+      <PromptInputModal
+        isOpen={isRenameModalOpen}
+        title="Rename Playlist"
+        description={`Enter a new name for playlist "${selectedPlaylistName}":`}
+        initialValue={selectedPlaylistName || ""}
+        placeholder="New playlist name..."
+        confirmLabel="Rename"
+        icon={<Edit2 className="w-4 h-4" />}
+        onSubmit={executeRenamePlaylist}
+        onClose={() => setIsRenameModalOpen(false)}
+      />
+
+      {/* Create New Playlist Modal */}
+      <PromptInputModal
+        isOpen={isCreateModalOpen}
+        title="Create New Playlist"
+        description="Enter a name for your new persistent playlist collection:"
+        initialValue=""
+        placeholder="My Awesome Playlist..."
+        confirmLabel="Create"
+        icon={<Plus className="w-4 h-4" />}
+        onSubmit={executeCreatePlaylist}
+        onClose={() => setIsCreateModalOpen(false)}
+      />
     </section>
   );
 }

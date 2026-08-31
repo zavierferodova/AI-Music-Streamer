@@ -78,12 +78,12 @@ export function VolumeControls({
         </button>
       </div>
 
-      <div className="flex items-center gap-2 mt-3 overflow-x-auto pb-1">
+      <div className="grid grid-cols-5 gap-1.5 sm:flex sm:items-center sm:gap-2 mt-3 pb-1">
         {presets.map((preset) => (
           <button
             key={preset}
             onClick={() => onVolumeChange(preset)}
-            className={`px-3 py-1 rounded-xl text-xs font-medium border transition-all ${
+            className={`text-center py-1.5 px-2 sm:px-3 rounded-xl text-xs font-medium border transition-all ${
               volume === preset
                 ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
                 : "bg-slate-800/50 text-slate-400 border-slate-700/60 hover:text-white hover:bg-slate-800"
