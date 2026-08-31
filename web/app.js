@@ -321,12 +321,14 @@ const otpInputs = document.querySelectorAll('.otp-digit');
 
 function openLockModal() {
   lockModal.classList.add('active');
+  document.body.classList.add('otp-locked', 'no-scroll');
   lockError.innerText = '';
   if (otpInputs.length > 0) otpInputs[0].focus();
 }
 
 function closeLockModal() {
   lockModal.classList.remove('active');
+  document.body.classList.remove('otp-locked', 'no-scroll');
 }
 
 // OTP 6-Digit input auto-advancement & backspace
@@ -1416,7 +1418,10 @@ function openSaveToPlaylistModal(url, title = '', thumbnail = '') {
   saveModalSelectedPlaylist = selectedPlaylistName || (currentPlaylists.length > 0 ? currentPlaylists[0].name : null);
   renderSaveModalPlaylists(currentPlaylists);
 
-  if (modal) modal.style.display = 'flex';
+  if (modal) {
+    modal.style.display = 'flex';
+    document.body.classList.add('modal-open');
+  }
   if (searchInput) setTimeout(() => searchInput.focus(), 50);
 }
 
@@ -1503,6 +1508,7 @@ function selectSaveModalPlaylist(plName, elem) {
 function closeSaveToPlaylistModal() {
   const modal = document.getElementById('save-playlist-modal-overlay');
   if (modal) modal.style.display = 'none';
+  document.body.classList.remove('modal-open', 'no-scroll');
 }
 
 async function confirmSaveTrackToPlaylist() {

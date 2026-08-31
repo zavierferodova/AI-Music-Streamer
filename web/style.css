@@ -932,7 +932,15 @@ body {
   transform: translateX(-50%) translateY(0);
 }
 
-/* Security Lock Screen Modal */
+/* Security Lock Screen Modal & Body Scroll Lock */
+body.no-scroll,
+body.modal-open,
+body.otp-locked {
+  overflow: hidden !important;
+  height: 100vh !important;
+  overscroll-behavior: contain;
+}
+
 .lock-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -944,6 +952,7 @@ body {
   justify-content: center;
   z-index: 9999;
   padding: 20px;
+  overflow-y: auto;
 }
 
 .lock-overlay.active {
