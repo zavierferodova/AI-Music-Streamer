@@ -1,0 +1,440 @@
+"use client";
+
+import { useState, useEffect, useCallback, KeyboardEvent } from "react";
+import {
+  Library,
+  Plus,
+  Search,
+  ListMusic,
+  Disc3,
+  Edit2,
+  Play,
+  Shuffle,
+  ListPlus,
+  Trash2,
+  PlusCircle,
+  X,
+  Music2,
+} from "lucide-react";
+import { Playlist, Track } from "@/types";
+import {
+  fetchPlaylist,
+  createPlaylist,
+  renamePlaylist,
+  deletePlaylist,
+  addTrackToPlaylist,
+  removeTrackFromPlaylist,
+} from "@/lib/api";
+import { formatTrackDisplay, matchesSearchQuery } from "@/lib/utils";
+import { useToast } from "@/hooks/useToast";
+
+interface PlaylistExplorerProps {
+  playlists: Playlist[];
+  onPlayPlaylist: (name: string, shuffle?: boolean) => void;
+  onQueuePlaylist: (name: string, shuffle?: boolean) => void;
+  onPlaySingleUrl: (url: string, title?: string) => void;
+  onRefreshStatus: () => void;
+}
+
+export function PlaylistExplorer({
+  playlists,
+  onPlayPlaylist,
+  onQueuePlaylist,
+  onPlaySingleUrl,
+  onRefreshStatus,
+}: PlaylistExplorerProps) {
+  const { showToast } = useToast();
+  const [selectedPlaylistName, setSelectedPlaylistName] = useState<string | null>(null);
+  const [activePlaylistData, setActivePlaylistData] = useState<Playlist | null>(null);
+  const [playlistSearchFilter, setPlaylistSearchFilter] = useState("");
+  const [trackSearchFilter, setTrackSearchFilter] = useState("");
+  const [newTrackInput, setNewTrackInput] = useState("");
+  const [loadingTracks, setLoadingTracks] = useState(false);
+
+  // Auto-select first playlist if none selected
+  useEffect(() => {
+    if (playlists.length > 0) {
+      if (
+        !selectedPlaylistName ||
+        !playlists.some((p) => p.name.toLowerCase() === selectedPlaylistName.toLowerCase())
+      ) {
+        setSelectedPlaylistName(playlists[0].name);
+      }
+    } else {
+      setSelectedPlaylistName(null);
+      setActivePlaylistData(null);
+    }
+  }, [playlists, selectedPlaylistName]);
+
+  // Load active playlist data
+  const loadPlaylistDetails = useCallback(
+    async (name: string, showSkeleton: boolean = false) => {
+      if (!name) return;
+      if (showSkeleton) setLoadingTracks(true);
+      try {
+        const data = await fetchPlaylist(name);
+        if (data) {
+          setActivePlaylistData(data);
+        }
+      } catch (err) {
+        console.error("loadPlaylistDetails error:", err);
+      } finally {
+        setLoadingTracks(false);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (selectedPlaylistName) {
+      loadPlaylistDetails(selectedPlaylistName, true);
+    }
+  }, [selectedPlaylistName, loadPlaylistDetails]);
+
+  // Actions
+  const handleCreateNewPlaylist = async () => {
+    const name = window.prompt("Enter a name for the new playlist:");
+    if (!name || !name.trim()) return;
+    const clean = name.trim();
+    const ok = await createPlaylist(clean);
+    if (ok) {
+      showToast(`Created playlist "${clean}"`, "success", "library_add");
+      setSelectedPlaylistName(clean);
+      onRefreshStatus();
+    } else {
+      showToast("Failed to create playlist", "error", "error_outline");
+    }
+  };
+
+  const handleRenamePlaylist = async () => {
+    if (!selectedPlaylistName) return;
+    const newName = window.prompt(`Rename playlist "${selectedPlaylistName}" to:`, selectedPlaylistName);
+    if (!newName || !newName.trim() || newName.trim() === selectedPlaylistName) return;
+    const clean = newName.trim();
+    const ok = await renamePlaylist(selectedPlaylistName, clean);
+    if (ok) {
+      showToast(`Renamed playlist to "${clean}"`, "success", "edit");
+      setSelectedPlaylistName(clean);
+      onRefreshStatus();
+    } else {
+      showToast("Failed to rename playlist", "error", "error_outline");
+    }
+  };
+
+  const handleDeletePlaylist = async () => {
+    if (!selectedPlaylistName) return;
+    if (window.confirm(`Are you sure you want to delete playlist "${selectedPlaylistName}"?`)) {
+      const target = selectedPlaylistName;
+      const ok = await deletePlaylist(target);
+      if (ok) {
+        showToast(`Deleted playlist "${target}"`, "info", "delete");
+        setSelectedPlaylistName(null);
+        setActivePlaylistData(null);
+        onRefreshStatus();
+      } else {
+        showToast("Failed to delete playlist", "error", "error_outline");
+      }
+    }
+  };
+
+  const handleAddTrack = async () => {
+    if (!selectedPlaylistName || !newTrackInput.trim()) return;
+    const val = newTrackInput.trim();
+    setNewTrackInput("");
+    showToast(`Adding track to "${selectedPlaylistName}"...`, "info", "playlist_add");
+    const ok = await addTrackToPlaylist(selectedPlaylistName, val);
+    if (ok) {
+      showToast(`Added track to "${selectedPlaylistName}"!`, "success", "check_circle");
+      loadPlaylistDetails(selectedPlaylistName, false);
+      onRefreshStatus();
+    } else {
+      showToast("Failed to add track", "error", "error_outline");
+    }
+  };
+
+  const handleRemoveTrack = async (index: number) => {
+    if (!selectedPlaylistName) return;
+    const ok = await removeTrackFromPlaylist(selectedPlaylistName, index);
+    if (ok) {
+      showToast("Removed track from playlist", "info", "close");
+      loadPlaylistDetails(selectedPlaylistName, false);
+      onRefreshStatus();
+    } else {
+      showToast("Failed to remove track", "error", "error_outline");
+    }
+  };
+
+  const filteredPlaylists = playlistSearchFilter
+    ? playlists.filter((p) => matchesSearchQuery(p.name, playlistSearchFilter))
+    : playlists;
+
+  const rawTracks: Track[] = activePlaylistData?.tracks || [];
+  const filteredTracks = trackSearchFilter
+    ? rawTracks.filter((t) => matchesSearchQuery(`${t.title || ""} ${t.url || ""}`, trackSearchFilter))
+    : rawTracks;
+
+  return (
+    <section
+      className="w-full my-6 p-5 sm:p-6 rounded-3xl bg-slate-900/80 border border-slate-700/60 shadow-xl backdrop-blur-xl"
+      aria-label="Persistent Playlists Library"
+    >
+      {/* Header bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+        <div className="flex items-center gap-2.5">
+          <Library className="w-5 h-5 text-indigo-400" />
+          <h3 className="text-base font-bold text-white tracking-tight">Playlists Library</h3>
+          <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-xs font-semibold text-indigo-300">
+            {playlists.length}
+          </span>
+        </div>
+
+        <button
+          onClick={handleCreateNewPlaylist}
+          className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-500/20 transition-all hover:scale-105 active:scale-95 shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+          <span>New Playlist</span>
+        </button>
+      </div>
+
+      {/* 2-Column Explorer Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-5 mt-5">
+        {/* Left Sidebar: Navigation list */}
+        <div className="md:col-span-4 flex flex-col gap-3">
+          {/* Filter box */}
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={playlistSearchFilter}
+              onChange={(e) => setPlaylistSearchFilter(e.target.value)}
+              placeholder="Search playlists..."
+              className="w-full pl-9 pr-3 py-2 rounded-2xl bg-slate-800/80 border border-slate-700 text-xs text-white placeholder-slate-400 outline-none focus:border-indigo-500/50"
+            />
+          </div>
+
+          {/* Navigation Items */}
+          <div className="max-h-[320px] md:max-h-[420px] overflow-y-auto space-y-1.5 pr-1">
+            {filteredPlaylists.length === 0 ? (
+              <div className="py-6 text-center text-xs text-slate-400">
+                {playlists.length === 0 ? 'No playlists created yet. Click "+ New Playlist"!' : "No playlists match search."}
+              </div>
+            ) : (
+              filteredPlaylists.map((p) => {
+                const isSelected = p.name.toLowerCase() === (selectedPlaylistName || "").toLowerCase();
+                return (
+                  <button
+                    key={p.name}
+                    onClick={() => {
+                      setSelectedPlaylistName(p.name);
+                      loadPlaylistDetails(p.name, true);
+                    }}
+                    className={`w-full flex items-center justify-between p-3 rounded-2xl border text-left transition-all ${
+                      isSelected
+                        ? "bg-indigo-500/20 border-indigo-500/50 text-white shadow-md shadow-indigo-500/10"
+                        : "bg-slate-800/40 hover:bg-slate-800/80 border-slate-700/40 text-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <ListMusic
+                        className={`w-4 h-4 shrink-0 ${isSelected ? "text-indigo-400" : "text-slate-400"}`}
+                      />
+                      <span className="text-xs font-semibold truncate">{p.name}</span>
+                    </div>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${
+                        isSelected ? "bg-indigo-400/30 text-indigo-200" : "bg-slate-800 text-slate-400"
+                      }`}
+                    >
+                      {p.track_count || 0}
+                    </span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Right Main Content */}
+        <div className="md:col-span-8 flex flex-col rounded-2xl bg-slate-800/30 border border-slate-700/40 p-4 sm:p-5">
+          {activePlaylistData ? (
+            <>
+              {/* Active Playlist Toolbar Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-700/60">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shrink-0 shadow-md">
+                    <Disc3 className="w-6 h-6 animate-spin-slow" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">
+                      Playlist
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-base font-bold text-white truncate">
+                        {activePlaylistData.name}
+                      </h4>
+                      <button
+                        onClick={handleRenamePlaylist}
+                        className="p-1 rounded-md text-slate-400 hover:text-white transition-colors"
+                        title="Rename Playlist"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="text-[11px] text-slate-400">
+                      {rawTracks.length} tracks • Persistent SQLite Collection
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap self-end sm:self-center">
+                  <button
+                    onClick={() => onPlayPlaylist(activePlaylistData.name, false)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 text-xs font-semibold border border-sky-500/40 transition-all hover:scale-105"
+                    title="Play sequential"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-sky-300" />
+                    <span>Play Ordered</span>
+                  </button>
+                  <button
+                    onClick={() => onPlayPlaylist(activePlaylistData.name, true)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-200 text-xs font-semibold border border-indigo-500/40 transition-all hover:scale-105"
+                    title="Play shuffled"
+                  >
+                    <Shuffle className="w-3.5 h-3.5" />
+                    <span>Play Shuffled</span>
+                  </button>
+                  <button
+                    onClick={() => onQueuePlaylist(activePlaylistData.name, false)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-700/60 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-all hover:scale-105"
+                    title="Append to queue"
+                  >
+                    <ListPlus className="w-3.5 h-3.5" />
+                    <span>Queue</span>
+                  </button>
+                  <button
+                    onClick={handleDeletePlaylist}
+                    className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-all hover:scale-105"
+                    title="Delete playlist"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Track Search Filter */}
+              {rawTracks.length > 0 && (
+                <div className="relative my-3">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={trackSearchFilter}
+                    onChange={(e) => setTrackSearchFilter(e.target.value)}
+                    placeholder="Search & filter tracks in this playlist..."
+                    className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-xs text-white placeholder-slate-400 outline-none focus:border-indigo-500/50"
+                  />
+                </div>
+              )}
+
+              {/* Tracks List */}
+              <div className="flex-1 max-h-[260px] overflow-y-auto space-y-1.5 my-2 pr-1">
+                {loadingTracks ? (
+                  <div className="space-y-2 py-3">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="h-10 bg-slate-800/60 rounded-xl animate-pulse" />
+                    ))}
+                  </div>
+                ) : filteredTracks.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-slate-400">
+                    {rawTracks.length === 0
+                      ? "This playlist is empty. Add songs using the input below!"
+                      : `No tracks match "${trackSearchFilter}".`}
+                  </div>
+                ) : (
+                  filteredTracks.map((t, idx) => {
+                    const display = formatTrackDisplay(t.title, t.url);
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-800/40 hover:bg-slate-800/80 border border-slate-700/40 transition-all"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="text-[10px] font-mono text-slate-400 w-5 text-right shrink-0">
+                            #{idx + 1}
+                          </span>
+                          {t.thumbnail ? (
+                            <img
+                              src={t.thumbnail}
+                              alt={display.title}
+                              className="w-8 h-8 rounded-lg object-cover shrink-0 border border-slate-700"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 shrink-0">
+                              <Music2 className="w-4 h-4" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <div className="text-xs font-semibold text-white truncate">
+                              {display.title}
+                            </div>
+                            {display.url && (
+                              <div className="text-[10px] text-slate-400 truncate">{display.url}</div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => onPlaySingleUrl(t.url, t.title)}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 text-xs font-medium border border-sky-500/30 transition-all"
+                            title="Play directly"
+                          >
+                            <Play className="w-3 h-3 fill-sky-300" />
+                            <span>Play</span>
+                          </button>
+                          <button
+                            onClick={() => handleRemoveTrack(idx)}
+                            className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                            title="Remove from playlist"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Add Track Input */}
+              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-700/60">
+                <input
+                  type="text"
+                  value={newTrackInput}
+                  onChange={(e) => setNewTrackInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleAddTrack();
+                  }}
+                  placeholder="Add song or YouTube URL to this playlist..."
+                  className="flex-1 rounded-xl bg-slate-800/80 border border-slate-700 text-xs text-white placeholder-slate-400 px-3 py-2 outline-none focus:border-indigo-500/50"
+                />
+                <button
+                  onClick={handleAddTrack}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-200 text-xs font-semibold border border-indigo-500/40 transition-all hover:scale-105"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  <span>Add</span>
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-slate-400">
+              <ListMusic className="w-10 h-10 stroke-[1.5] mb-2 opacity-50 text-indigo-400" />
+              <p className="text-xs">Select or create a playlist on the left.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}

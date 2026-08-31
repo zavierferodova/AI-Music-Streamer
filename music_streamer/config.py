@@ -13,7 +13,8 @@ RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = RUNTIME_DIR / "music_streamer.db"
 SOCKET_PATH = str(RUNTIME_DIR / "control.sock")
 WEB_DIR = ROOT_DIR / "web"
-INDEX_HTML_PATH = WEB_DIR / "index.html"
+WEB_OUT_DIR = WEB_DIR / "out"
+INDEX_HTML_PATH = (WEB_OUT_DIR / "index.html") if (WEB_OUT_DIR / "index.html").exists() else (WEB_DIR / "index.html")
 
 PID_FILE = RUNTIME_DIR / "stream_server.pid"
 PLAYER_PID_FILE = RUNTIME_DIR / "player.pid"

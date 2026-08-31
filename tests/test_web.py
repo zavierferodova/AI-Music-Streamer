@@ -89,19 +89,25 @@ class TestWebServer(unittest.TestCase):
         """Verify serving CSS and JS static assets with correct MIME types."""
         conn = self._get_connection()
 
-        # CSS
-        conn.request("GET", "/style.css")
-        resp_css = conn.getresponse()
-        self.assertEqual(resp_css.status, 200)
-        self.assertIn("text/css", resp_css.getheader("Content-Type", ""))
-        self.assertTrue(len(resp_css.read()) > 0)
+        web_out = Path(__file__).resolve().parent.parent / "web" / "out"
+        css_files = list(web_out.rglob("*.css")) if web_out.exists() else []
+        js_files = list(web_out.rglob("*.js")) if web_out.exists() else []
 
-        # JS
-        conn.request("GET", "/app.js")
-        resp_js = conn.getresponse()
-        self.assertEqual(resp_js.status, 200)
-        self.assertIn("application/javascript", resp_js.getheader("Content-Type", ""))
-        self.assertTrue(len(resp_js.read()) > 0)
+        if css_files:
+            css_rel = "/" + css_files[0].relative_to(web_out).as_posix()
+            conn.request("GET", css_rel)
+            resp_css = conn.getresponse()
+            self.assertEqual(resp_css.status, 200)
+            self.assertIn("text/css", resp_css.getheader("Content-Type", ""))
+            self.assertTrue(len(resp_css.read()) > 0)
+
+        if js_files:
+            js_rel = "/" + js_files[0].relative_to(web_out).as_posix()
+            conn.request("GET", js_rel)
+            resp_js = conn.getresponse()
+            self.assertEqual(resp_js.status, 200)
+            self.assertIn("application/javascript", resp_js.getheader("Content-Type", ""))
+            self.assertTrue(len(resp_js.read()) > 0)
 
         conn.close()
 

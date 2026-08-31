@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import parse_qs, urlparse
 
-from music_streamer.config import INDEX_HTML_PATH, SOCKET_PATH, WEB_DIR, WS_GUID
+from music_streamer.config import INDEX_HTML_PATH, SOCKET_PATH, WEB_DIR, WEB_OUT_DIR, WS_GUID
 from music_streamer.db import DatabaseManager, db
 from music_streamer.engine import AudioEngine, Broadcaster
 from music_streamer.playback import PlaybackManager, get_thumbnail_for_url, playback_mgr
@@ -382,8 +382,16 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(rendered_html.encode("utf-8"))
             return
 
-        elif (WEB_DIR / path.lstrip("/")).is_file() and (WEB_DIR / path.lstrip("/")).resolve().is_relative_to(WEB_DIR):
-            static_file = (WEB_DIR / path.lstrip("/")).resolve()
+        elif (
+            ((WEB_OUT_DIR / path.lstrip("/")).is_file() and (WEB_OUT_DIR / path.lstrip("/")).resolve().is_relative_to(WEB_OUT_DIR))
+            or ((WEB_DIR / path.lstrip("/")).is_file() and (WEB_DIR / path.lstrip("/")).resolve().is_relative_to(WEB_DIR))
+        ):
+            relative_path = path.lstrip("/")
+            if (WEB_OUT_DIR / relative_path).is_file() and (WEB_OUT_DIR / relative_path).resolve().is_relative_to(WEB_OUT_DIR):
+                static_file = (WEB_OUT_DIR / relative_path).resolve()
+            else:
+                static_file = (WEB_DIR / relative_path).resolve()
+
             mime_map = {
                 ".css": "text/css; charset=utf-8",
                 ".js": "application/javascript; charset=utf-8",
@@ -394,6 +402,8 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
                 ".svg": "image/svg+xml",
                 ".ico": "image/x-icon",
                 ".woff2": "font/woff2",
+                ".html": "text/html; charset=utf-8",
+                ".txt": "text/plain; charset=utf-8",
             }
             content_type = mime_map.get(static_file.suffix.lower(), "application/octet-stream")
             self.send_response(200)
