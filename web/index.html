@@ -472,7 +472,7 @@
         <div class="search-section" id="search-local-section">
           <div class="search-section-header">
             <div class="search-section-title-wrap">
-              <span class="material-symbols-rounded" style="color: var(--accent);">folder_music</span>
+              <span class="material-symbols-rounded" style="color: var(--accent);">library_music</span>
               <span class="search-section-heading">Found in Playlists & Library</span>
               <span class="badge badge-server" id="search-local-count">0 found</span>
             </div>
@@ -496,6 +496,70 @@
           <ul class="search-results-list" id="search-web-list">
             <!-- Dynamic web results or skeleton -->
           </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Save Track to Playlist Modal Dialog -->
+  <div class="search-modal-overlay save-playlist-modal-overlay" id="save-playlist-modal-overlay" style="display: none;" onclick="if(event.target===this) closeSaveToPlaylistModal()">
+    <div class="search-modal-card save-playlist-modal-card">
+      <div class="search-modal-header">
+        <div class="search-modal-title">
+          <span class="material-symbols-rounded" style="color: var(--accent);">playlist_add</span>
+          <span>Save to Playlist</span>
+        </div>
+        <button class="btn-icon-subtle" onclick="closeSaveToPlaylistModal()" title="Close" style="background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 4px;">
+          <span class="material-symbols-rounded">close</span>
+        </button>
+      </div>
+
+      <div class="search-modal-body" style="gap: 16px; padding: 20px 24px;">
+        <!-- Track Details Preview Card -->
+        <div class="save-modal-track-preview" style="display: flex; align-items: center; gap: 12px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 12px 14px;">
+          <div class="playback-thumb-box" style="width: 44px; height: 44px; border-radius: 6px; flex-shrink: 0;">
+            <img id="save-modal-track-thumb" class="playback-thumb-img" src="" alt="thumb" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+            <div class="playback-thumb-fallback" style="display: none;"><span class="material-symbols-rounded">music_note</span></div>
+          </div>
+          <div style="min-width: 0; flex: 1;">
+            <div id="save-modal-track-title" style="font-weight: 600; font-size: 0.92rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Track Title</div>
+            <div id="save-modal-track-url" style="font-size: 0.76rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">https://...</div>
+          </div>
+        </div>
+
+        <!-- Playlist Selection Header & Search Filter -->
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-dim);">Select Target Playlist:</span>
+            <span id="save-modal-playlist-count" style="font-size: 0.75rem; color: var(--text-muted);">0 playlists</span>
+          </div>
+          <div style="position: relative; margin-bottom: 8px;">
+            <span class="material-symbols-rounded" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 16px; pointer-events: none;">search</span>
+            <input type="text" id="save-modal-search-input" class="input-field" style="padding-left: 32px; font-size: 0.82rem; height: 34px; background: rgba(0, 0, 0, 0.25); border-radius: 6px;" placeholder="Search playlist name..." oninput="filterSaveModalPlaylists(this.value)">
+          </div>
+          <div class="playlist-modal-list-wrap" style="max-height: 180px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; background: rgba(0,0,0,0.25); padding: 6px;" id="save-modal-playlist-list">
+            <!-- Dynamic playlist selectable cards/radios -->
+          </div>
+        </div>
+
+        <!-- Option to Create New Playlist -->
+        <div style="background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.12); border-radius: 8px; padding: 10px 14px;">
+          <div style="font-size: 0.82rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+            <span class="material-symbols-rounded" style="font-size: 16px; color: var(--primary);">add_circle</span>
+            <span>Or create a new playlist:</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="save-modal-new-pl-name" class="input-field" placeholder="New playlist name..." style="height: 36px; font-size: 0.82rem;" onkeydown="if(event.key==='Enter') confirmSaveTrackToPlaylist()">
+          </div>
+        </div>
+
+        <!-- Modal Actions Footer -->
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08);">
+          <button class="btn btn-secondary" style="padding: 8px 16px; font-size: 0.85rem;" onclick="closeSaveToPlaylistModal()">Cancel</button>
+          <button class="btn btn-primary" id="btn-save-modal-confirm" style="padding: 8px 20px; font-size: 0.85rem;" onclick="confirmSaveTrackToPlaylist()">
+            <span class="material-symbols-rounded" id="save-modal-btn-icon">playlist_add</span>
+            <span id="save-modal-btn-text">Save to Playlist</span>
+          </button>
         </div>
       </div>
     </div>

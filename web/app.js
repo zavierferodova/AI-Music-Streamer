@@ -1270,6 +1270,10 @@ async function executeUniversalSearch() {
                   <span class="material-symbols-rounded" style="font-size: 16px;">queue</span>
                   <span>Queue</span>
                 </button>
+                <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.78rem; min-height: 32px;" onclick="openSaveToPlaylistModal('${safeUrl}', '${safeTitle}', '${safeThumb}');" title="Save to Playlist">
+                  <span class="material-symbols-rounded" style="font-size: 16px;">playlist_add</span>
+                  <span>Save</span>
+                </button>
               </div>
             </li>
           `;
@@ -1318,7 +1322,7 @@ async function executeUniversalSearch() {
                   <span class="material-symbols-rounded" style="font-size: 16px;">queue</span>
                   <span>Queue</span>
                 </button>
-                <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.78rem; min-height: 32px;" onclick="addUrlToPlaylistPrompt('${safeUrl}', '${safeTitle}');" title="Save to Playlist">
+                <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.78rem; min-height: 32px;" onclick="openSaveToPlaylistModal('${safeUrl}', '${safeTitle}', '${safeThumb}');" title="Save to Playlist">
                   <span class="material-symbols-rounded" style="font-size: 16px;">playlist_add</span>
                   <span>Save</span>
                 </button>
@@ -1355,56 +1359,219 @@ function quickAddUrlToQueue(url, title = '') {
   showToast(`Added "${title || url}" to upcoming queue`, 'success', 'queue');
 }
 
-async function addUrlToPlaylistPrompt(url, title = '') {
-  if (currentPlaylists.length === 0) {
-    const plName = prompt('Enter a name for a new playlist to save this track:');
-    if (plName && plName.trim()) {
-      const cleanName = plName.trim();
-      sendCommand({ action: 'playlist_create', name: cleanName });
-      setTimeout(async () => {
-        try {
-          await fetch('/api/playlist/add', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ playlist: cleanName, url: url, title: title })
-          });
-          showToast(`Saved to playlist "${cleanName}"`, 'success', 'playlist_add');
-          loadedPlaylistData = null;
-          updateStatus();
-        } catch (e) {
-          sendCommand({ action: 'playlist_add', playlist: cleanName, url: url, title: title });
-        }
-      }, 300);
+/* =========================================================================
+   Save to Playlist Modal Dialog Logic
+   ========================================================================= */
+let saveModalTrackData = {
+  url: '',
+  title: '',
+  thumbnail: ''
+};
+let saveModalSelectedPlaylist = null;
+
+function getThumbnailFromUrl(url) {
+  if (!url) return '';
+  const m = url.match(/(?:v=|youtu\.be\/|shorts\/|embed\/|watch\?.*v=)([a-zA-Z0-9_-]{11})/);
+  if (m) {
+    return `https://i.ytimg.com/vi/${m[1]}/hqdefault.jpg`;
+  }
+  return '';
+}
+
+function openSaveToPlaylistModal(url, title = '', thumbnail = '') {
+  if (!url) return;
+  saveModalTrackData = {
+    url: url,
+    title: title || url,
+    thumbnail: thumbnail || getThumbnailFromUrl(url)
+  };
+
+  const modal = document.getElementById('save-playlist-modal-overlay');
+  const titleElem = document.getElementById('save-modal-track-title');
+  const urlElem = document.getElementById('save-modal-track-url');
+  const thumbImg = document.getElementById('save-modal-track-thumb');
+  const countElem = document.getElementById('save-modal-playlist-count');
+  const listElem = document.getElementById('save-modal-playlist-list');
+  const newPlInput = document.getElementById('save-modal-new-pl-name');
+
+  if (titleElem) titleElem.innerText = saveModalTrackData.title;
+  if (urlElem) urlElem.innerText = saveModalTrackData.url;
+  if (newPlInput) newPlInput.value = '';
+
+  const safeThumb = saveModalTrackData.thumbnail;
+  if (thumbImg) {
+    if (safeThumb) {
+      thumbImg.src = safeThumb;
+      thumbImg.style.display = 'block';
+      if (thumbImg.nextElementSibling) thumbImg.nextElementSibling.style.display = 'none';
+    } else {
+      thumbImg.style.display = 'none';
+      if (thumbImg.nextElementSibling) thumbImg.nextElementSibling.style.display = 'flex';
     }
+  }
+
+  const searchInput = document.getElementById('save-modal-search-input');
+  if (searchInput) searchInput.value = '';
+
+  saveModalSelectedPlaylist = selectedPlaylistName || (currentPlaylists.length > 0 ? currentPlaylists[0].name : null);
+  renderSaveModalPlaylists(currentPlaylists);
+
+  if (modal) modal.style.display = 'flex';
+  if (searchInput) setTimeout(() => searchInput.focus(), 50);
+}
+
+function renderSaveModalPlaylists(filteredPlaylists = currentPlaylists) {
+  const countElem = document.getElementById('save-modal-playlist-count');
+  const listElem = document.getElementById('save-modal-playlist-list');
+
+  if (countElem) {
+    if (filteredPlaylists.length !== currentPlaylists.length) {
+      countElem.innerText = `${filteredPlaylists.length} of ${currentPlaylists.length} playlist(s)`;
+    } else {
+      countElem.innerText = `${currentPlaylists.length} playlist(s)`;
+    }
+  }
+
+  if (!listElem) return;
+
+  if (currentPlaylists.length === 0) {
+    listElem.innerHTML = '<div style="color: var(--text-muted); font-size: 0.82rem; padding: 12px; text-align: center;">No playlists created yet. Enter a new playlist name below!</div>';
+    saveModalSelectedPlaylist = null;
     return;
   }
 
-  const plNames = currentPlaylists.map(p => p.name).join('\n• ');
-  const target = prompt(`Save track to which playlist?\nAvailable playlists:\n• ${plNames}`, selectedPlaylistName || currentPlaylists[0].name);
-  if (target && target.trim()) {
-    const cleanTarget = target.trim();
-    try {
-      const res = await fetch('/api/playlist/add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playlist: cleanTarget, url: url, title: title })
-      });
-      if (res.ok) {
-        showToast(`Saved to playlist "${cleanTarget}"`, 'success', 'playlist_add');
-        loadedPlaylistData = null;
-        if (selectedPlaylistName && selectedPlaylistName.toLowerCase() === cleanTarget.toLowerCase()) {
-          await loadActivePlaylist(cleanTarget, false);
-        }
-        updateStatus();
-      } else {
-        sendCommand({ action: 'playlist_add', playlist: cleanTarget, url: url, title: title });
-        showToast(`Saved to playlist "${cleanTarget}"`, 'success', 'playlist_add');
+  if (filteredPlaylists.length === 0) {
+    listElem.innerHTML = '<div style="color: var(--text-muted); font-size: 0.82rem; padding: 16px 12px; text-align: center;"><span class="material-symbols-rounded" style="display:block; font-size:24px; color:var(--text-dim); margin-bottom:4px;">search_off</span>No matching playlists found</div>';
+    return;
+  }
+
+  // If currently selected playlist isn't in filtered list, pick the first filtered playlist
+  if (!filteredPlaylists.some(p => p.name.toLowerCase() === (saveModalSelectedPlaylist || '').toLowerCase())) {
+    saveModalSelectedPlaylist = filteredPlaylists[0].name;
+  }
+
+  listElem.innerHTML = filteredPlaylists.map(pl => {
+    const isSelected = (pl.name.toLowerCase() === (saveModalSelectedPlaylist || '').toLowerCase());
+    return `
+      <div class="save-modal-pl-item ${isSelected ? 'selected' : ''}" onclick="selectSaveModalPlaylist('${escapeHtml(pl.name)}', this)" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 6px; margin-bottom: 4px; cursor: pointer; background: ${isSelected ? 'rgba(56, 189, 248, 0.15)' : 'transparent'}; border: 1px solid ${isSelected ? 'var(--primary)' : 'transparent'}; transition: all 0.15s;">
+        <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+          <span class="material-symbols-rounded" style="color: ${isSelected ? 'var(--primary)' : 'var(--text-dim)'}; font-size: 18px;">${isSelected ? 'radio_button_checked' : 'radio_button_unchecked'}</span>
+          <span style="font-size: 0.85rem; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(pl.name)}</span>
+        </div>
+        <span class="badge" style="font-size: 0.7rem; padding: 2px 6px; background: rgba(255,255,255,0.06); color: var(--text-muted);">${pl.track_count || 0} tracks</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function filterSaveModalPlaylists(query = '') {
+  const q = query.trim();
+  if (!q) {
+    renderSaveModalPlaylists(currentPlaylists);
+    return;
+  }
+  const filtered = currentPlaylists.filter(pl => matchesSearchQuery(pl.name, q));
+  renderSaveModalPlaylists(filtered);
+}
+
+function selectSaveModalPlaylist(plName, elem) {
+  saveModalSelectedPlaylist = plName;
+  const listElem = document.getElementById('save-modal-playlist-list');
+  if (listElem) {
+    const items = listElem.querySelectorAll('.save-modal-pl-item');
+    items.forEach(it => {
+      it.style.background = 'transparent';
+      it.style.borderColor = 'transparent';
+      const icon = it.querySelector('.material-symbols-rounded');
+      if (icon) {
+        icon.innerText = 'radio_button_unchecked';
+        icon.style.color = 'var(--text-dim)';
       }
-    } catch (e) {
-      sendCommand({ action: 'playlist_add', playlist: cleanTarget, url: url, title: title });
-      showToast(`Saved to playlist "${cleanTarget}"`, 'success', 'playlist_add');
+    });
+  }
+  if (elem) {
+    elem.style.background = 'rgba(56, 189, 248, 0.15)';
+    elem.style.borderColor = 'var(--primary)';
+    const icon = elem.querySelector('.material-symbols-rounded');
+    if (icon) {
+      icon.innerText = 'radio_button_checked';
+      icon.style.color = 'var(--primary)';
     }
   }
+}
+
+function closeSaveToPlaylistModal() {
+  const modal = document.getElementById('save-playlist-modal-overlay');
+  if (modal) modal.style.display = 'none';
+}
+
+async function confirmSaveTrackToPlaylist() {
+  const newPlInput = document.getElementById('save-modal-new-pl-name');
+  const newPlName = newPlInput ? newPlInput.value.trim() : '';
+  const confirmBtn = document.getElementById('btn-save-modal-confirm');
+
+  let targetPlName = newPlName || saveModalSelectedPlaylist;
+  if (!targetPlName) {
+    showToast('Please select a playlist or enter a new playlist name', 'warning', 'warning');
+    return;
+  }
+
+  setButtonLoading(confirmBtn, true, 'Saving...');
+
+  try {
+    // If creating a new playlist first
+    if (newPlName && !currentPlaylists.some(p => p.name.toLowerCase() === newPlName.toLowerCase())) {
+      const createRes = await fetch('/api/playlist/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newPlName })
+      });
+      if (!createRes.ok) throw new Error('Failed to create playlist');
+    }
+
+    const res = await fetch('/api/playlist/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        playlist: targetPlName,
+        url: saveModalTrackData.url,
+        title: saveModalTrackData.title
+      })
+    });
+
+    if (res.ok) {
+      showToast(`Saved to playlist "${targetPlName}"!`, 'success', 'playlist_add');
+      closeSaveToPlaylistModal();
+      loadedPlaylistData = null;
+      lastRenderedActivePlaylistSignature = '';
+      if (selectedPlaylistName && selectedPlaylistName.toLowerCase() === targetPlName.toLowerCase()) {
+        await loadActivePlaylist(targetPlName, false);
+      }
+      updateStatus();
+    } else {
+      throw new Error('Failed to add track to playlist');
+    }
+  } catch (err) {
+    console.error('Save to playlist error:', err);
+    sendCommand({
+      action: 'playlist_add',
+      playlist: targetPlName,
+      url: saveModalTrackData.url,
+      title: saveModalTrackData.title
+    });
+    showToast(`Saved to playlist "${targetPlName}"!`, 'success', 'playlist_add');
+    closeSaveToPlaylistModal();
+    setTimeout(() => {
+      loadedPlaylistData = null;
+      updateStatus();
+    }, 400);
+  } finally {
+    setButtonLoading(confirmBtn, false);
+  }
+}
+
+function addUrlToPlaylistPrompt(url, title = '') {
+  openSaveToPlaylistModal(url, title);
 }
 
 /* =========================================================================
@@ -1676,11 +1843,15 @@ function applyStatusUpdate(data) {
                 ${displayInfo.url ? `<div class="playback-item-url">${displayInfo.url}</div>` : ''}
               </div>
               <div class="playback-item-actions">
-                ${actionBtnHtml}
-                <button class="btn-item-action btn-item-remove" title="Remove track from list" onclick="removeTrackItem(${idx})">
-                  <span class="material-symbols-rounded">close</span>
-                </button>
-              </div>
+              ${actionBtnHtml}
+              <button class="btn-item-action btn-item-save" title="Save to Playlist" onclick="openSaveToPlaylistModal('${escapeHtml(t.url)}', '${escapeHtml(t.title || '')}', '${safeThumb}')">
+                <span class="material-symbols-rounded">playlist_add</span>
+                <span>Save</span>
+              </button>
+              <button class="btn-item-action btn-item-remove" title="Remove track from list" onclick="removeTrackItem(${idx})">
+                <span class="material-symbols-rounded">close</span>
+              </button>
+            </div>
             </li>
           `;
         }).join('');

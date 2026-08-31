@@ -835,6 +835,22 @@ body {
   font-size: 16px;
 }
 
+.btn-item-save {
+  background: rgba(168, 85, 247, 0.12);
+  color: var(--accent);
+  border-color: rgba(168, 85, 247, 0.25);
+}
+
+.btn-item-save:hover {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+}
+
+.btn-item-save .material-symbols-rounded {
+  font-size: 16px;
+}
+
 .btn-item-remove {
   color: var(--text-dim);
   padding: 6px 8px;
@@ -1106,7 +1122,8 @@ body {
   }
 
   .btn-item-play span:not(.material-symbols-rounded),
-  .btn-item-replay span:not(.material-symbols-rounded) {
+  .btn-item-replay span:not(.material-symbols-rounded),
+  .btn-item-save span:not(.material-symbols-rounded) {
     display: none;
   }
   .btn-item-action {
@@ -1603,6 +1620,14 @@ body {
   flex-direction: column;
   overflow: hidden;
   animation: modalFadeIn 0.2s ease-out;
+}
+
+.save-playlist-modal-card {
+  max-width: 520px;
+}
+
+.save-modal-pl-item:hover {
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .search-modal-header {
