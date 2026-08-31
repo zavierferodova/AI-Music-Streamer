@@ -276,10 +276,10 @@ def handle_play(args: argparse.Namespace) -> int:
     # Ensure stream server daemon is running
     server_pid = is_server_running()
     if not server_pid:
-        print("Starting stream server daemon in background (mode: speaker)...")
+        print("Starting stream server daemon in background (mode: silent)...")
         stream_script = ROOT_DIR / "stream.py"
         subprocess.Popen(
-            [sys.executable, str(stream_script), "--daemon", "--mode", "speaker", "--port", str(DEFAULT_PORT)],
+            [sys.executable, str(stream_script), "--daemon", "--mode", "silent", "--port", str(DEFAULT_PORT)],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -296,7 +296,8 @@ def handle_play(args: argparse.Namespace) -> int:
         print(f"Warning: {resp.get('error')}", file=sys.stderr)
 
     lan_ip = get_lan_ip()
-    print("Started playback (Synchronized Server Speaker + HTTP Broadcast):")
+    cur_mode = db.get_setting("mode", "silent").upper()
+    print(f"Started playback (Broadcast Mode: {cur_mode}):")
     print(f"  Title        : {resolved_title or url}")
     print(f"  URL          : {url}")
     print(f"  Volume       : {vol_int}%")

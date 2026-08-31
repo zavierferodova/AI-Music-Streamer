@@ -60,5 +60,5 @@ def send_ipc_command(
 
     return {
         "success": False,
-        "error": "Stream server is not running. Start with: ./stream.py --daemon --mode speaker --port 8000",
+        "error": "Stream server is not running. Start with: ./stream.py --daemon --mode silent --port 8000",
     }

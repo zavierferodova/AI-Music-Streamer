@@ -331,9 +331,15 @@ function toggleLoop() {
 }
 
 function toggleMode() {
-  const nextMode = currentMode === 'silent' ? 'speaker' : 'silent';
-  sendCommand({ action: 'mode', mode: nextMode });
-  showToast(nextMode === 'speaker' ? 'Switched to Speaker Sync Mode' : 'Switched to Silent Broadcast Mode', 'volume_up');
+  if (currentMode === 'silent') {
+    if (confirm('Switch to Speaker Sync Mode?\n\nThis will unmute the server speaker and output audio out loud in sync with the live stream.')) {
+      sendCommand({ action: 'mode', mode: 'speaker' });
+      showToast('Switched to Speaker Sync Mode', 'volume_up');
+    }
+  } else {
+    sendCommand({ action: 'mode', mode: 'silent' });
+    showToast('Switched to Silent Broadcast Mode (Speaker Muted)', 'volume_off');
+  }
 }
 
 function togglePlaybackMode() {
