@@ -63,7 +63,7 @@
     <section class="search-bar-section" aria-label="Search Music">
       <div class="search-bar-inner">
         <span class="material-symbols-rounded search-bar-icon">search</span>
-        <input type="text" id="universal-search-input" class="search-bar-input" placeholder="Search song in playlists, queue, or online YouTube..." onkeydown="if(event.key==='Enter') executeUniversalSearch()">
+        <input type="text" id="universal-search-input" class="search-bar-input" placeholder="Search song in playlists, queue, or online YouTube..." enterkeyhint="search" autocapitalize="none" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter') executeUniversalSearch()">
         <div class="search-input-spinner" id="search-input-spinner" style="display: none;"></div>
         <button class="btn btn-primary" id="btn-search-exec" onclick="executeUniversalSearch()">
           <span class="material-symbols-rounded" id="btn-search-icon">search</span>
@@ -331,7 +331,7 @@
 
       <!-- Quick Add / Interrupt Play Input -->
       <div class="quick-input-box">
-        <input type="text" id="quick-url-input" class="input-field" placeholder="Paste YouTube URL or song name..." onkeydown="if(event.key==='Enter') quickAddPlayback()">
+        <input type="text" id="quick-url-input" class="input-field" placeholder="Paste YouTube URL or song name..." enterkeyhint="go" autocapitalize="none" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter') quickAddPlayback()">
         <button class="btn btn-primary" id="btn-quick-add" onclick="quickAddPlayback()">
           <span class="material-symbols-rounded" id="quick-add-icon">playlist_add</span>
           <span id="quick-add-text">Add to List</span>
@@ -366,7 +366,7 @@
         <div class="playlist-sidebar">
           <div class="playlist-search-box">
             <span class="material-symbols-rounded playlist-search-icon">search</span>
-            <input type="text" id="playlist-filter-input" class="playlist-search-input" placeholder="Search playlists..." oninput="filterPlaylistList(this.value)">
+            <input type="text" id="playlist-filter-input" class="playlist-search-input" placeholder="Search playlists..." enterkeyhint="search" autocapitalize="none" autocomplete="off" spellcheck="false" oninput="filterPlaylistList(this.value)">
           </div>
 
           <div class="playlist-nav-list" id="playlist-nav-list">
@@ -425,7 +425,7 @@
           <!-- Active Playlist Track Filter Input -->
           <div class="playlist-track-filter-box" id="playlist-track-filter-box" style="display: none; margin-bottom: 12px; position: relative;">
             <span class="material-symbols-rounded" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 18px; pointer-events: none;">search</span>
-            <input type="text" id="playlist-track-filter-input" class="input-field" style="padding-left: 38px; font-size: 0.82rem; height: 36px;" placeholder="Search & filter tracks in this playlist..." oninput="filterActivePlaylistTracks(this.value)">
+            <input type="text" id="playlist-track-filter-input" class="input-field" style="padding-left: 38px; font-size: 0.82rem; height: 36px;" placeholder="Search & filter tracks in this playlist..." enterkeyhint="search" autocapitalize="none" autocomplete="off" spellcheck="false" oninput="filterActivePlaylistTracks(this.value)">
           </div>
 
           <!-- Active Playlist Tracklist -->
@@ -435,7 +435,7 @@
 
           <!-- Add Track to Active Playlist -->
           <div class="quick-input-box" id="playlist-add-box" style="display: none; margin-top: 14px;">
-            <input type="text" id="playlist-add-input" class="input-field" placeholder="Add song or YouTube URL to this playlist..." onkeydown="if(event.key==='Enter') addTrackToActivePlaylist()">
+            <input type="text" id="playlist-add-input" class="input-field" placeholder="Add song or YouTube URL to this playlist..." enterkeyhint="done" autocapitalize="none" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter') addTrackToActivePlaylist()">
             <button class="btn btn-primary" id="btn-pl-add-track" onclick="addTrackToActivePlaylist()">
               <span class="material-symbols-rounded" id="pl-add-icon">add_circle</span>
               <span id="pl-add-text">Add to Playlist</span>
