@@ -176,8 +176,15 @@ export default function Home() {
         {/* Status Metrics Grid */}
         <StatusGrid status={status} isAdmin={isAdmin} />
 
-        {/* Stream Audio Player Box */}
-        <StreamPlayer />
+        {/* Stream Audio Player Box (with Background Playback & Lockscreen Support) */}
+        <StreamPlayer
+          status={status}
+          isAdmin={isAdmin}
+          onTogglePlayPause={togglePlayPause}
+          onPlayPrevious={playPreviousTrack}
+          onSkipTrack={skipTrack}
+          onSeekRelative={seekRelative}
+        />
 
         {/* Playback Tracklist */}
         <PlaybackList
