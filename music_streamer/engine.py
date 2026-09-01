@@ -434,14 +434,28 @@ class AudioEngine:
                     print(f"[AudioEngine] Resumed: {self.current_title}")
                     continue
                 else:
-                    nxt, _ = self.playback_mgr.get_next_track_for_playback(
-                        loop=self.loop in ["yes", "1", "true", "on"],
-                        allow_restart=True,
-                    )
-                    if nxt:
-                        self.current_url = nxt["url"]
-                        self.current_title = nxt["title"]
-                        self.current_thumbnail = nxt.get("thumbnail") or get_thumbnail_for_url(nxt["url"])
+                    target_track = None
+                    if self.state == "stopped":
+                        tracks = self.db.get_tracks()
+                        playing = [t for t in tracks if t.get("status") == "playing"]
+                        played = [t for t in tracks if t.get("status") == "played"]
+                        if playing:
+                            target_track = playing[0]
+                        elif played:
+                            last_played_track = played[-1]
+                            self.playback_mgr.play_track_by_id(last_played_track["id"])
+                            target_track = self.db.get_track_by_id(last_played_track["id"])
+
+                    if not target_track:
+                        target_track, _ = self.playback_mgr.get_next_track_for_playback(
+                            loop=self.loop in ["yes", "1", "true", "on"],
+                            allow_restart=True,
+                        )
+
+                    if target_track:
+                        self.current_url = target_track["url"]
+                        self.current_title = target_track["title"]
+                        self.current_thumbnail = target_track.get("thumbnail") or get_thumbnail_for_url(target_track["url"])
                         self.current_duration = 0
                         self.elapsed_offset = 0.0
                         self.paused_time = None
@@ -482,6 +496,37 @@ class AudioEngine:
                     self._resume_decoder()
                     self._sync_runtime_state()
                     print("[AudioEngine] Resumed")
+                elif self.state == "stopped":
+                    tracks = self.db.get_tracks()
+                    playing = [t for t in tracks if t.get("status") == "playing"]
+                    played = [t for t in tracks if t.get("status") == "played"]
+                    target_track = None
+                    if playing:
+                        target_track = playing[0]
+                    elif played:
+                        last_played_track = played[-1]
+                        self.playback_mgr.play_track_by_id(last_played_track["id"])
+                        target_track = self.db.get_track_by_id(last_played_track["id"])
+
+                    if not target_track:
+                        target_track, _ = self.playback_mgr.get_next_track_for_playback(
+                            loop=self.loop in ["yes", "1", "true", "on"],
+                            allow_restart=True,
+                        )
+
+                    if target_track:
+                        self.current_url = target_track["url"]
+                        self.current_title = target_track["title"]
+                        self.current_thumbnail = target_track.get("thumbnail") or get_thumbnail_for_url(target_track["url"])
+                        self.current_duration = 0
+                        self.elapsed_offset = 0.0
+                        self.paused_time = None
+                        self._stop_decoder()
+                        self.state = "playing"
+                        self._sync_runtime_state()
+                        print(f"[AudioEngine] Playing (resumed from stop): {self.current_title} ({self.current_url})")
+                        self.decoder_proc = self._start_decoder(self.current_url)
+                        self._fetch_title_async(self.current_url)
 
             elif action == "stop":
                 self.state = "stopped"

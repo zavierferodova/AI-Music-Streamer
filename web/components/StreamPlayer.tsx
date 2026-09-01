@@ -133,25 +133,31 @@ export function StreamPlayer({
             {isPlaying && (
               <span
                 className={`inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-0.5 rounded-full border text-[10px] sm:text-[11px] font-semibold tracking-wide shadow-sm transition-all shrink-0 ${latencyStyle.badge}`}
-                title={`Live stream playback sync latency: ${latencyMs}ms`}
+                title={
+                  engineMode === "direct_mp3"
+                    ? "Continuous HTTP MP3 live broadcast"
+                    : `Live stream playback sync latency: ${latencyMs}ms`
+                }
               >
                 <Zap className={`w-3 h-3 animate-pulse ${latencyStyle.icon}`} />
                 <span className="hidden sm:inline">{latencyStyle.statusText}</span>
-                <span className="sm:hidden">{engineMode === "direct_mp3" ? "MP3" : "Live"}</span>
-                <span className="text-[10px] opacity-75 font-mono">({latencyMs}ms)</span>
+                <span className="sm:hidden">{engineMode === "direct_mp3" ? "Direct MP3" : "Live"}</span>
+                {engineMode === "webaudio" && (
+                  <span className="text-[10px] opacity-75 font-mono">({latencyMs}ms)</span>
+                )}
               </span>
             )}
 
-            {isPlaying && (
+            {isPlaying && engineMode === "direct_mp3" && (
               <span
-                className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full bg-sky-500/10 border border-sky-500/20 text-[10px] text-sky-300 font-medium shrink-0"
+                className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-[10px] text-indigo-300 font-medium shrink-0"
                 title={
                   isAdmin
-                    ? "Background playback and lockscreen media controls are active (Admin: full control)"
-                    : "Background playback is active (Subscriber: listen-only, lockscreen controls disabled)"
+                    ? "Native MP3 background playback is active (Admin: full control)"
+                    : "Native MP3 background playback is active (Subscriber: listen-only, lockscreen controls disabled)"
                 }
               >
-                <ShieldCheck className="w-3 h-3 text-sky-400" />
+                <ShieldCheck className="w-3 h-3 text-indigo-400" />
                 <span className="hidden xs:inline">{isAdmin ? "Background Active" : "Background (Listen Only)"}</span>
                 <span className="xs:hidden">BG</span>
               </span>
