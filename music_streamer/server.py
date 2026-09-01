@@ -161,9 +161,15 @@ def build_server_status(
     client_cnt = broadcaster.client_count() if broadcaster else 0
 
     elapsed = 0
-    if engine and engine.track_start_time and state == "playing":
-        elapsed = int(time.time() - engine.track_start_time)
+    if engine and engine.track_start_time and state in ["playing", "paused"]:
+        if state == "playing":
+            elapsed = max(0, int(time.time() - engine.track_start_time))
+        elif state == "paused" and getattr(engine, "paused_time", None):
+            elapsed = max(0, int(engine.paused_time - engine.track_start_time))
+        else:
+            elapsed = max(0, int(getattr(engine, "elapsed_offset", 0)))
 
+    duration = getattr(engine, "current_duration", 0) if engine else db_inst.get_int_setting("current_duration", 0)
     vol = engine.volume if engine else db_inst.get_int_setting("volume", 80)
 
     # Subscribers CANNOT view playlists
@@ -183,6 +189,7 @@ def build_server_status(
             "title": cur_title or None,
             "thumbnail": cur_thumb or None,
             "elapsed_seconds": elapsed,
+            "duration_seconds": duration,
         },
         "loop": loop,
         "last_error": getattr(engine, "last_error", None) if engine else None,
@@ -347,7 +354,7 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
                 self.server.ws_hub.unregister(self.wfile)
             return
 
-        elif path == "/status":
+        elif path in ["/status", "/api/status"]:
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
@@ -642,6 +649,10 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             engine.post_command({"action": "resume"})
         elif action == "stop":
             engine.post_command({"action": "stop"})
+        elif action in ["seek", "progress"]:
+            engine.post_command({"action": "seek", "seconds": payload.get("seconds", payload.get("position", 0))})
+        elif action in ["seek_relative", "seek_step", "progress_toggle"]:
+            engine.post_command({"action": "seek_relative", "delta": payload.get("delta", payload.get("seconds", 10))})
         elif action in ["skip", "next"]:
             engine.post_command({"action": "skip"})
         elif action in ["prev", "previous", "playback_prev"]:
@@ -851,6 +862,18 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
         elif path == "/api/stop":
             engine.post_command({"action": "stop"})
             self._send_json({"status": "ok", "action": "stop"})
+
+        elif path in ["/api/seek", "/api/progress"]:
+            pos = payload.get("seconds", payload.get("position"))
+            delta = payload.get("delta")
+            if delta is not None:
+                engine.post_command({"action": "seek_relative", "delta": float(delta)})
+                self._send_json({"status": "ok", "action": "seek_relative", "delta": float(delta)})
+            elif pos is not None:
+                engine.post_command({"action": "seek", "seconds": float(pos)})
+                self._send_json({"status": "ok", "action": "seek", "seconds": float(pos)})
+            else:
+                self._send_json({"status": "error", "error": "Missing seconds or delta parameter"})
 
         elif path in ["/api/skip", "/api/next"]:
             engine.post_command({"action": "skip"})

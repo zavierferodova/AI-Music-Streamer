@@ -103,3 +103,18 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     return false;
   }
 }
+
+export function formatSeconds(seconds?: number | null): string {
+  if (seconds === undefined || seconds === null || isNaN(seconds) || seconds < 0) {
+    return "00:00";
+  }
+  const s = Math.floor(seconds);
+  const m = Math.floor(s / 60);
+  const remSec = s % 60;
+  if (m >= 60) {
+    const h = Math.floor(m / 60);
+    const remMin = m % 60;
+    return `${h}:${remMin.toString().padStart(2, "0")}:${remSec.toString().padStart(2, "0")}`;
+  }
+  return `${m.toString().padStart(2, "0")}:${remSec.toString().padStart(2, "0")}`;
+}

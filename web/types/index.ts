@@ -9,6 +9,7 @@ export interface NowPlaying {
   title: string | null;
   thumbnail: string | null;
   elapsed_seconds?: number;
+  duration_seconds?: number;
 }
 
 export interface PlaybackError {

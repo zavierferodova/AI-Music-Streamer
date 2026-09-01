@@ -190,6 +190,8 @@ def fetch_track_metadata(
         "%(title)s",
         "--print",
         "%(thumbnail)s",
+        "--print",
+        "%(duration)s",
         url,
     ]
 
@@ -198,15 +200,23 @@ def fetch_track_metadata(
         lines = [line.strip() for line in raw.splitlines() if line.strip()]
         title = lines[0] if lines else url
         thumbnail = lines[1] if len(lines) > 1 and lines[1].startswith("http") else thumb_fallback
+        duration = 0
+        if len(lines) > 2:
+            try:
+                duration = int(float(lines[2]))
+            except Exception:
+                duration = 0
         return {
             "title": title,
             "thumbnail": thumbnail,
+            "duration": duration,
             "url": url,
         }
     except Exception:
         return {
             "title": url,
             "thumbnail": thumb_fallback,
+            "duration": 0,
             "url": url,
         }
 

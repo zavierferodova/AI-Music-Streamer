@@ -261,6 +261,25 @@ export function useStreamStatus() {
     }
   }, [volume, previousVolume, sendCommand, showToast]);
 
+  const seekTo = useCallback(
+    (seconds: number) => {
+      sendCommand({ action: "seek", seconds: Math.max(0, seconds) });
+    },
+    [sendCommand]
+  );
+
+  const seekRelative = useCallback(
+    (delta: number) => {
+      sendCommand({ action: "seek_relative", delta });
+      showToast(
+        `Jumped ${delta > 0 ? `+${delta}s` : `${delta}s`}`,
+        "info",
+        delta > 0 ? "fast_forward" : "fast_rewind"
+      );
+    },
+    [sendCommand, showToast]
+  );
+
   const retryServerConnection = useCallback(() => {
     wsClient.connect();
     fetchServerStatus().then((res) => {
@@ -295,6 +314,8 @@ export function useStreamStatus() {
     handleVolumeChange,
     handleVolumeStep,
     toggleMute,
+    seekTo,
+    seekRelative,
     retryServerConnection,
   };
 }

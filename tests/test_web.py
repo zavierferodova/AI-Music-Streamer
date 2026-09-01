@@ -483,6 +483,57 @@ class TestWebServer(unittest.TestCase):
 
         s.close()
 
+    def test_api_seek_and_progress_duration(self):
+        """Verify POST /api/seek and duration_seconds in status response."""
+        admin_otp = self.security.get_admin_otp()
+        conn = self._get_connection()
+
+        # Check status contains duration_seconds and elapsed_seconds
+        conn.request("GET", f"/api/status?otp={admin_otp}")
+        resp = conn.getresponse()
+        self.assertEqual(resp.status, 200)
+        data = json.loads(resp.read().decode("utf-8"))
+        self.assertIn("now_playing", data)
+        self.assertIn("duration_seconds", data["now_playing"])
+        self.assertIn("elapsed_seconds", data["now_playing"])
+
+        # Test POST /api/seek with admin OTP
+        with patch.object(self.engine, "post_command") as mock_cmd:
+            conn.request(
+                "POST",
+                f"/api/seek?otp={admin_otp}",
+                body=json.dumps({"seconds": 120}),
+                headers={"Content-Type": "application/json"},
+            )
+            resp_seek = conn.getresponse()
+            self.assertEqual(resp_seek.status, 200)
+            mock_cmd.assert_called_with({"action": "seek", "seconds": 120.0})
+
+        # Test POST /api/seek with relative delta
+        with patch.object(self.engine, "post_command") as mock_cmd:
+            conn.request(
+                "POST",
+                f"/api/seek?otp={admin_otp}",
+                body=json.dumps({"delta": -15}),
+                headers={"Content-Type": "application/json"},
+            )
+            resp_seek = conn.getresponse()
+            self.assertEqual(resp_seek.status, 200)
+            mock_cmd.assert_called_with({"action": "seek_relative", "delta": -15.0})
+
+        # Test subscriber cannot seek (Forbidden 403)
+        sub_otp = self.security.get_subscriber_otp()
+        conn.request(
+            "POST",
+            f"/api/seek?otp={sub_otp}",
+            body=json.dumps({"seconds": 60}),
+            headers={"Content-Type": "application/json"},
+        )
+        resp_sub = conn.getresponse()
+        self.assertEqual(resp_sub.status, 403)
+
+        conn.close()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Play,
   Pause,
@@ -18,9 +18,12 @@ import {
   ExternalLink,
   Headphones,
   Radio,
+  RotateCcw,
+  RotateCw,
+  Clock,
 } from "lucide-react";
 import { ServerStatus } from "@/types";
-import { formatTrackDisplay, copyToClipboard } from "@/lib/utils";
+import { formatTrackDisplay, copyToClipboard, formatSeconds } from "@/lib/utils";
 import { VolumeControls } from "./VolumeControls";
 import { useToast } from "@/hooks/useToast";
 
@@ -37,6 +40,8 @@ interface NowPlayingHeroProps {
   onVolumeChange: (val: number) => void;
   onVolumeStep: (delta: number) => void;
   onToggleMute: () => void;
+  onSeekTo?: (seconds: number) => void;
+  onSeekRelative?: (deltaSeconds: number) => void;
 }
 
 export function NowPlayingHero({
@@ -52,9 +57,13 @@ export function NowPlayingHero({
   onVolumeChange,
   onVolumeStep,
   onToggleMute,
+  onSeekTo,
+  onSeekRelative,
 }: NowPlayingHeroProps) {
   const { showToast } = useToast();
   const [imgError, setImgError] = useState(false);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [scrubValue, setScrubValue] = useState(0);
 
   const isPlaying = status?.state === "playing";
   const isPaused = status?.state === "paused";
@@ -66,6 +75,60 @@ export function NowPlayingHero({
   const rawUrl = status?.now_playing?.url || "";
   const thumbUrl = status?.now_playing?.thumbnail;
   const display = formatTrackDisplay(rawTitle, rawUrl);
+
+  const serverElapsed = status?.now_playing?.elapsed_seconds || 0;
+  const duration = status?.now_playing?.duration_seconds || 0;
+
+  // Local continuous smooth clock ticker between WebSocket updates
+  const [localElapsed, setLocalElapsed] = useState(serverElapsed);
+  const lastSyncTimeRef = useRef(Date.now());
+  const baseElapsedRef = useRef(serverElapsed);
+
+  useEffect(() => {
+    baseElapsedRef.current = serverElapsed;
+    lastSyncTimeRef.current = Date.now();
+    setLocalElapsed(serverElapsed);
+  }, [serverElapsed]);
+
+  useEffect(() => {
+    if (!isPlaying) {
+      setLocalElapsed(serverElapsed);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      if (!isScrubbing) {
+        const elapsedSec = baseElapsedRef.current + Math.floor((Date.now() - lastSyncTimeRef.current) / 1000);
+        setLocalElapsed(duration > 0 ? Math.min(duration, Math.max(0, elapsedSec)) : Math.max(0, elapsedSec));
+      }
+    }, 250);
+
+    return () => clearInterval(interval);
+  }, [isPlaying, isScrubbing, duration, serverElapsed]);
+
+  // Sync scrub value when not dragging
+  useEffect(() => {
+    if (!isScrubbing) {
+      setScrubValue(localElapsed);
+    }
+  }, [localElapsed, isScrubbing]);
+
+  const currentDisplayElapsed = isScrubbing ? scrubValue : localElapsed;
+  const effectiveDuration = duration > 0 ? duration : (isPlaying || isPaused ? Math.max(localElapsed + 60, 300) : 0);
+  const progressPercent = effectiveDuration > 0 ? Math.min(100, Math.max(0, (currentDisplayElapsed / effectiveDuration) * 100)) : 0;
+
+  const handleSeekInput = (val: number) => {
+    setIsScrubbing(true);
+    setScrubValue(val);
+  };
+
+  const handleSeekCommit = () => {
+    setIsScrubbing(false);
+    if (onSeekTo) {
+      onSeekTo(scrubValue);
+      showToast(`Seeked to ${formatSeconds(scrubValue)}`, "info", "fast_forward");
+    }
+  };
 
   const handleCopyLink = async () => {
     if (!rawUrl) return;
@@ -185,6 +248,117 @@ export function NowPlayingHero({
             )}
           </div>
         </div>
+      </div>
+
+      {/* Real-time Track Duration Progress & Seeking */}
+      <div className="w-full my-3 p-3 sm:p-4 rounded-2xl bg-slate-950/60 border border-slate-800/80 shadow-inner">
+        {/* Progress Bar & Timestamps */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs font-mono">
+            <div className="flex items-center gap-1.5 text-sky-400 font-semibold">
+              <Clock className="w-3.5 h-3.5" />
+              <span>{formatSeconds(currentDisplayElapsed)}</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {isAdmin ? (
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                  Seek Active
+                </span>
+              ) : (
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-slate-700">
+                  Read-Only Sync
+                </span>
+              )}
+              <span className="text-slate-400 font-medium">
+                {duration > 0 ? formatSeconds(duration) : isPlaying ? "Live / Stream" : "--:--"}
+              </span>
+            </div>
+          </div>
+
+          {/* Interactive Scrub Slider (Admin) or Read-Only Progress (Subscriber) */}
+          {isAdmin ? (
+            <div className="relative flex items-center group py-1">
+              <input
+                type="range"
+                min="0"
+                max={effectiveDuration}
+                step="1"
+                value={currentDisplayElapsed}
+                onPointerDown={() => setIsScrubbing(true)}
+                onMouseDown={() => setIsScrubbing(true)}
+                onTouchStart={() => setIsScrubbing(true)}
+                onInput={(e) => handleSeekInput(Number((e.target as HTMLInputElement).value))}
+                onChange={(e) => handleSeekInput(Number(e.target.value))}
+                onPointerUp={handleSeekCommit}
+                onMouseUp={handleSeekCommit}
+                onTouchEnd={handleSeekCommit}
+                onKeyUp={(e) => {
+                  if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+                    handleSeekCommit();
+                  }
+                }}
+                disabled={!isPlaying && !isPaused}
+                className="w-full h-2.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-400 focus:outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                  background: `linear-gradient(to right, #38bdf8 0%, #6366f1 ${progressPercent}%, #1e293b ${progressPercent}%, #1e293b 100%)`,
+                }}
+                title="Click or drag to seek track position"
+              />
+            </div>
+          ) : (
+            <div className="w-full h-2.5 rounded-lg bg-slate-800 overflow-hidden relative">
+              <div
+                className="h-full bg-gradient-to-r from-sky-400 via-indigo-500 to-sky-400 transition-all duration-300 rounded-lg"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Admin Quick Progress Togglers (+10s, +30s, -10s, -30s) */}
+        {isAdmin && isPlaying && (
+          <div className="flex items-center justify-between gap-2 mt-3 pt-2.5 border-t border-slate-800/60 flex-wrap">
+            <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1">
+              <span>Progress Toggler</span>
+            </span>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => onSeekRelative?.(-30)}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-all hover:scale-105 active:scale-95"
+                title="Rewind 30 seconds"
+              >
+                <RotateCcw className="w-3 h-3 text-sky-400" />
+                <span>-30s</span>
+              </button>
+              <button
+                onClick={() => onSeekRelative?.(-10)}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-all hover:scale-105 active:scale-95"
+                title="Rewind 10 seconds"
+              >
+                <RotateCcw className="w-3 h-3 text-sky-400" />
+                <span>-10s</span>
+              </button>
+              <button
+                onClick={() => onSeekRelative?.(10)}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-all hover:scale-105 active:scale-95"
+                title="Forward 10 seconds"
+              >
+                <span>+10s</span>
+                <RotateCw className="w-3 h-3 text-sky-400" />
+              </button>
+              <button
+                onClick={() => onSeekRelative?.(30)}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-all hover:scale-105 active:scale-95"
+                title="Forward 30 seconds"
+              >
+                <span>+30s</span>
+                <RotateCw className="w-3 h-3 text-sky-400" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Admin Playback Controls & Master Volume */}

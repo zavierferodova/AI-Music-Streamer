@@ -107,7 +107,10 @@ class AudioEngine:
         self.original_thumbnail = ""
         self.volume = self.db.get_int_setting("volume", default=80)
         self.loop = self.db.get_setting("loop", default="yes")
+        self.current_duration: int = self.db.get_int_setting("current_duration", default=0)
         self.track_start_time: Optional[float] = None
+        self.paused_time: Optional[float] = None
+        self.elapsed_offset: float = 0.0
         self.last_error: Optional[dict] = None
         self.is_buffering: bool = False
         self.chunks_played: int = 0
@@ -152,6 +155,7 @@ class AudioEngine:
             self.db.set_setting("current_url", self.current_url)
             self.db.set_setting("current_title", self.current_title)
             self.db.set_setting("current_thumbnail", self.current_thumbnail)
+            self.db.set_setting("current_duration", str(self.current_duration))
         except Exception as e:
             print(f"[AudioEngine] Error syncing DB state: {e}", file=sys.stderr)
 
@@ -174,7 +178,7 @@ class AudioEngine:
         self.action_event.set()
 
     def _fetch_title_async(self, url: str):
-        """Asynchronously fetch title and thumbnail without blocking playback start."""
+        """Asynchronously fetch title, thumbnail, and duration without blocking playback start."""
 
         def worker():
             try:
@@ -183,10 +187,13 @@ class AudioEngine:
                 meta = fetch_track_metadata(url)
                 title = meta.get("title") or url
                 thumb = meta.get("thumbnail") or get_thumbnail_for_url(url)
+                duration = int(meta.get("duration") or 0)
                 with self.lock:
                     if self.current_url == url:
                         self.current_title = title
                         self.current_thumbnail = thumb
+                        if duration > 0:
+                            self.current_duration = duration
                         self._sync_runtime_state()
                         # Update playing track in DB
                         tracks = self.db.get_tracks(status="playing")
@@ -312,16 +319,19 @@ class AudioEngine:
         except Exception:
             pass
 
-    def _start_decoder(self, url: str) -> subprocess.Popen:
-        """Start decoding pipeline: yt-dlp piped into ffmpeg outputting raw PCM."""
+    def _start_decoder(self, url: str, start_seconds: float = 0.0) -> subprocess.Popen:
+        """Start decoding pipeline: yt-dlp piped into ffmpeg outputting raw PCM with optional seek offset."""
         log_path = str(PLAYER_LOG_FILE)
+        ss_flag = f"-ss {start_seconds} " if start_seconds > 0 else ""
         shell_cmd = (
             f"yt-dlp -q --no-warnings --no-update --js-runtimes 'node:{NODE_BIN}' "
             f"--remote-components ejs:github --extractor-args 'youtube:player_client=mweb' "
             f"-f '18/bestaudio/best' --no-playlist -o - '{url}' 2>>'{log_path}' "
-            f"| ffmpeg -hide_banner -loglevel error -fflags +genpts -i pipe:0 -vn -f s16le -ar {SAMPLE_RATE} -ac {CHANNELS} pipe:1 2>>'{log_path}'"
+            f"| ffmpeg -hide_banner -loglevel error {ss_flag}-fflags +genpts -i pipe:0 {ss_flag}-vn -f s16le -ar {SAMPLE_RATE} -ac {CHANNELS} pipe:1 2>>'{log_path}'"
         )
-        self.track_start_time = time.time()
+        self.elapsed_offset = float(start_seconds)
+        self.track_start_time = time.time() - self.elapsed_offset
+        self.paused_time = None
         self.is_buffering = True
         self.chunks_played = 0
         proc = subprocess.Popen(
@@ -375,7 +385,20 @@ class AudioEngine:
                 break
 
             action = cmd.get("action")
-            if action in ["play", "interrupt", "playback_play", "queue_play", "skip", "next", "prev", "previous", "playback_prev"]:
+            if action in [
+                "play",
+                "interrupt",
+                "playback_play",
+                "queue_play",
+                "skip",
+                "next",
+                "prev",
+                "previous",
+                "playback_prev",
+                "seek",
+                "seek_relative",
+                "progress",
+            ]:
                 self.last_error = None
 
             if action == "play":
@@ -395,6 +418,9 @@ class AudioEngine:
                     self.current_url = self.original_url
                     self.current_title = self.original_title
                     self.current_thumbnail = self.original_thumbnail
+                    self.current_duration = 0
+                    self.elapsed_offset = 0.0
+                    self.paused_time = None
                     self.playback_mgr.mark_playing_url(url, self.original_title, self.original_thumbnail)
                     if not title:
                         self._fetch_title_async(url)
@@ -404,10 +430,16 @@ class AudioEngine:
                         self.current_url = nxt["url"]
                         self.current_title = nxt["title"]
                         self.current_thumbnail = nxt.get("thumbnail") or get_thumbnail_for_url(nxt["url"])
+                        self.current_duration = 0
+                        self.elapsed_offset = 0.0
+                        self.paused_time = None
                     elif self.original_url:
                         self.current_url = self.original_url
                         self.current_title = self.original_title
                         self.current_thumbnail = self.original_thumbnail
+                        self.current_duration = 0
+                        self.elapsed_offset = 0.0
+                        self.paused_time = None
                         self.playback_mgr.mark_playing_url(self.original_url, self.original_title, self.original_thumbnail)
 
                 if self.current_url:
@@ -416,11 +448,13 @@ class AudioEngine:
                     self._sync_runtime_state()
                     print(f"[AudioEngine] Playing: {self.current_title} ({self.current_url})")
                     self.decoder_proc = self._start_decoder(self.current_url)
+                    self._fetch_title_async(self.current_url)
 
             elif action == "pause":
                 self.is_buffering = False
                 if self.state == "playing":
                     self.state = "paused"
+                    self.paused_time = time.time()
                     self._pause_decoder()
                     self._close_alsa_sink()
                     self._sync_runtime_state()
@@ -430,6 +464,9 @@ class AudioEngine:
                 self.is_buffering = False
                 if self.state == "paused":
                     self.state = "playing"
+                    if self.paused_time and self.track_start_time:
+                        self.track_start_time += (time.time() - self.paused_time)
+                    self.paused_time = None
                     self._resume_decoder()
                     self._sync_runtime_state()
                     print("[AudioEngine] Resumed")
@@ -443,9 +480,50 @@ class AudioEngine:
                 self.current_url = ""
                 self.current_title = ""
                 self.current_thumbnail = ""
+                self.current_duration = 0
+                self.elapsed_offset = 0.0
+                self.paused_time = None
                 self.track_start_time = None
                 self._sync_runtime_state()
                 print("[AudioEngine] Stopped")
+
+            elif action in ["seek", "progress"]:
+                pos = float(cmd.get("seconds", cmd.get("position", 0.0)))
+                target_seconds = max(0.0, pos)
+                if self.current_duration > 0:
+                    target_seconds = min(float(self.current_duration), target_seconds)
+                if self.current_url:
+                    self._stop_decoder()
+                    self.state = "playing"
+                    self.paused_time = None
+                    self.elapsed_offset = float(target_seconds)
+                    self.track_start_time = time.time() - self.elapsed_offset
+                    self.decoder_proc = self._start_decoder(self.current_url, start_seconds=target_seconds)
+                    self._sync_runtime_state()
+                    print(f"[AudioEngine] Seeked to: {int(target_seconds)}s / {self.current_duration}s")
+
+            elif action in ["seek_relative", "seek_step", "progress_toggle"]:
+                delta = float(cmd.get("delta", cmd.get("seconds", 10.0)))
+                cur_pos = 0.0
+                if self.state == "playing" and self.track_start_time:
+                    cur_pos = max(0.0, time.time() - self.track_start_time)
+                elif self.state == "paused" and self.paused_time and self.track_start_time:
+                    cur_pos = max(0.0, self.paused_time - self.track_start_time)
+                else:
+                    cur_pos = self.elapsed_offset
+
+                target_seconds = max(0.0, cur_pos + delta)
+                if self.current_duration > 0:
+                    target_seconds = min(float(self.current_duration), target_seconds)
+                if self.current_url:
+                    self._stop_decoder()
+                    self.state = "playing"
+                    self.paused_time = None
+                    self.elapsed_offset = float(target_seconds)
+                    self.track_start_time = time.time() - self.elapsed_offset
+                    self.decoder_proc = self._start_decoder(self.current_url, start_seconds=target_seconds)
+                    self._sync_runtime_state()
+                    print(f"[AudioEngine] Seeked relative ({delta:+}s) to: {int(target_seconds)}s / {self.current_duration}s")
 
             elif action in ["skip", "next"]:
                 self._stop_decoder()
@@ -455,16 +533,23 @@ class AudioEngine:
                     self.current_url = nxt["url"]
                     self.current_title = nxt["title"]
                     self.current_thumbnail = nxt.get("thumbnail") or get_thumbnail_for_url(nxt["url"])
+                    self.current_duration = 0
+                    self.elapsed_offset = 0.0
+                    self.paused_time = None
                     self.state = "playing"
                     self._sync_runtime_state()
                     print(f"[AudioEngine] Skipped to: {self.current_title}")
                     self.decoder_proc = self._start_decoder(self.current_url)
+                    self._fetch_title_async(self.current_url)
                 else:
                     self.state = "stopped"
                     self._close_alsa_sink()
                     self.current_url = ""
                     self.current_title = ""
                     self.current_thumbnail = ""
+                    self.current_duration = 0
+                    self.elapsed_offset = 0.0
+                    self.paused_time = None
                     self.track_start_time = None
                     self._sync_runtime_state()
                     print("[AudioEngine] End of playback list")
@@ -477,16 +562,23 @@ class AudioEngine:
                     self.current_url = prv["url"]
                     self.current_title = prv["title"]
                     self.current_thumbnail = prv.get("thumbnail") or get_thumbnail_for_url(prv["url"])
+                    self.current_duration = 0
+                    self.elapsed_offset = 0.0
+                    self.paused_time = None
                     self.state = "playing"
                     self._sync_runtime_state()
                     print(f"[AudioEngine] Went back to previous track: {self.current_title}")
                     self.decoder_proc = self._start_decoder(self.current_url)
+                    self._fetch_title_async(self.current_url)
                 else:
                     self.state = "stopped"
                     self._close_alsa_sink()
                     self.current_url = ""
                     self.current_title = ""
                     self.current_thumbnail = ""
+                    self.current_duration = 0
+                    self.elapsed_offset = 0.0
+                    self.paused_time = None
                     self.track_start_time = None
                     self._sync_runtime_state()
                     print("[AudioEngine] No previous track available")
@@ -517,10 +609,14 @@ class AudioEngine:
                     self.current_url = url
                     self.current_title = title or url
                     self.current_thumbnail = thumb or get_thumbnail_for_url(url)
+                    self.current_duration = 0
+                    self.elapsed_offset = 0.0
+                    self.paused_time = None
                     self.state = "playing"
                     self._sync_runtime_state()
                     print(f"[AudioEngine] Interrupted — Playing: {self.current_title}")
                     self.decoder_proc = self._start_decoder(self.current_url)
+                    self._fetch_title_async(self.current_url)
 
             elif action == "set_mode":
                 mode = cmd.get("mode", "silent")

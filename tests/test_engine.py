@@ -98,13 +98,45 @@ class TestEngine(unittest.TestCase):
         self.assertEqual(engine.loop, "off")
         self.assertEqual(self.db.get_setting("loop"), "off")
 
+    def test_audio_engine_seek_and_relative(self):
+        """Verify AudioEngine processes seek and seek_relative commands."""
+        engine = AudioEngine(self.db, self.broadcaster, mode="silent")
+        engine.current_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        engine.current_duration = 210
+
+        with patch.object(engine, "_start_decoder") as mock_start, patch.object(engine, "_stop_decoder") as mock_stop:
+            mock_proc = MagicMock()
+            mock_start.return_value = mock_proc
+
+            # Test absolute seek
+            engine.post_command({"action": "seek", "seconds": 45})
+            engine._process_commands()
+            mock_start.assert_called_with(engine.current_url, start_seconds=45.0)
+            self.assertEqual(engine.elapsed_offset, 45.0)
+            self.assertEqual(engine.state, "playing")
+
+            # Test relative forward seek (+15s -> 60s)
+            mock_start.reset_mock()
+            engine.track_start_time = None
+            engine.post_command({"action": "seek_relative", "delta": 15})
+            engine._process_commands()
+            mock_start.assert_called_with(engine.current_url, start_seconds=60.0)
+            self.assertEqual(engine.elapsed_offset, 60.0)
+
+            # Test relative backward seek (-20s -> 40s)
+            mock_start.reset_mock()
+            engine.track_start_time = None
+            engine.post_command({"action": "seek_relative", "delta": -20})
+            engine._process_commands()
+            mock_start.assert_called_with(engine.current_url, start_seconds=40.0)
+            self.assertEqual(engine.elapsed_offset, 40.0)
+
     def test_audio_engine_on_audio_chunk(self):
         """Verify AudioEngine invokes on_audio_chunk callback with raw PCM or silence."""
         engine = AudioEngine(self.db, self.broadcaster, mode="silent")
         received = []
         engine.on_audio_chunk = lambda chunk: received.append(chunk)
 
-        # In stopped state, silence chunk should be dispatched to callback
         engine.running = False
         if engine.on_audio_chunk:
             engine.on_audio_chunk(SILENCE_CHUNK)

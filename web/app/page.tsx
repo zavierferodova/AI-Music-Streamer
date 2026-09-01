@@ -42,6 +42,8 @@ export default function Home() {
     handleVolumeChange,
     handleVolumeStep,
     toggleMute,
+    seekTo,
+    seekRelative,
     retryServerConnection,
     sendCommand,
   } = useStreamStatus();
@@ -165,6 +167,8 @@ export default function Home() {
           onVolumeChange={handleVolumeChange}
           onVolumeStep={handleVolumeStep}
           onToggleMute={toggleMute}
+          onSeekTo={seekTo}
+          onSeekRelative={seekRelative}
         />
 
         {/* Status Metrics Grid */}
