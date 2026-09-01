@@ -220,6 +220,15 @@ Adds multiple tracks to a named playlist: `{"playlist": "Favorites", "tracks": [
 #### `POST /api/playlist/remove_bulk`
 Removes multiple tracks from a named playlist: `{"playlist": "Favorites", "items": [1, 3, "Song B"]}`.
 
+#### `POST /api/playlist/move`
+Moves a track within a named playlist: `{"playlist": "Favorites", "from_index": 3, "to_index": 0}`.
+
+#### `POST /api/playlist/move_bulk`
+Batch moves multiple tracks in a playlist: `{"playlist": "Favorites", "items": ["Song A", "Song B"], "position": 1}`.
+
+#### `POST /api/playlist/reorder` (or `/api/playlist/reorder_bulk`)
+Reorders tracks in a named playlist: `{"playlist": "Favorites", "sequence": ["Song 3", "Song 1", "Song 2"]}`.
+
 #### `POST /api/playlist/play`
 Loads a playlist into the playback queue and begins playback: `{"name": "Favorites", "shuffle": false}`.
 

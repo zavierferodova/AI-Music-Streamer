@@ -15,6 +15,8 @@ import {
   PlusCircle,
   X,
   Music2,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { Playlist, Track } from "@/types";
 import {
@@ -24,6 +26,8 @@ import {
   deletePlaylist,
   addTrackToPlaylist,
   removeTrackFromPlaylist,
+  movePlaylistTrack,
+  reorderPlaylistTracks,
 } from "@/lib/api";
 import { formatTrackDisplay, matchesSearchQuery } from "@/lib/utils";
 import { useToast } from "@/hooks/useToast";
@@ -170,6 +174,30 @@ export function PlaylistExplorer({
       onRefreshStatus();
     } else {
       showToast("Failed to remove track", "error", "error_outline");
+    }
+  };
+
+  const handleMoveTrack = async (fromIndex: number, toIndex: number) => {
+    if (!selectedPlaylistName || !activePlaylistData) return;
+    const tracks = [...(activePlaylistData.tracks || [])];
+    if (fromIndex < 0 || fromIndex >= tracks.length || toIndex < 0 || toIndex >= tracks.length) return;
+
+    // Optimistic UI update
+    const [moved] = tracks.splice(fromIndex, 1);
+    tracks.splice(toIndex, 0, moved);
+    setActivePlaylistData({
+      ...activePlaylistData,
+      tracks,
+    });
+
+    const ok = await movePlaylistTrack(selectedPlaylistName, fromIndex, toIndex);
+    if (ok) {
+      showToast(`Moved track to position #${toIndex + 1}`, "success");
+      loadPlaylistDetails(selectedPlaylistName, false);
+      onRefreshStatus();
+    } else {
+      showToast("Failed to move track", "error", "error_outline");
+      loadPlaylistDetails(selectedPlaylistName, false);
     }
   };
 
@@ -394,8 +422,24 @@ export function PlaylistExplorer({
 
                         <div className="flex items-center gap-1 shrink-0">
                           <button
+                            onClick={() => handleMoveTrack(idx, idx - 1)}
+                            disabled={idx === 0}
+                            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/60 disabled:opacity-20 disabled:hover:bg-transparent transition-all"
+                            title="Move Up"
+                          >
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleMoveTrack(idx, idx + 1)}
+                            disabled={idx === rawTracks.length - 1}
+                            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/60 disabled:opacity-20 disabled:hover:bg-transparent transition-all"
+                            title="Move Down"
+                          >
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
+                          <button
                             onClick={() => onPlaySingleUrl(t.url, t.title)}
-                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 text-xs font-medium border border-sky-500/30 transition-all"
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 text-xs font-medium border border-sky-500/30 transition-all"
                             title="Play directly"
                           >
                             <Play className="w-3 h-3 fill-sky-300" />

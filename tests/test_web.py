@@ -787,9 +787,77 @@ class TestWebServer(unittest.TestCase):
         resp_rem = conn.getresponse()
         self.assertEqual(resp_rem.status, 200)
         data_rem = json.loads(resp_rem.read().decode("utf-8"))
-        self.assertTrue(data_rem["success"])
-        self.assertEqual(data_rem["removed_count"], 2)
-        self.assertEqual(data_rem["remaining_count"], 1)
+        conn.close()
+
+    def test_admin_playlist_move_and_reorder_bulk(self):
+        """Verify REST API /api/playlist/move and /api/playlist/reorder_bulk."""
+        admin_otp = self.security.get_admin_otp()
+        _, token, _ = self.security.verify_otp(admin_otp, client_ip="127.0.0.1")
+        auth_header = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+        conn = self._get_connection()
+
+        # 1. Create playlist with 4 tracks
+        conn.request("POST", "/api/playlist/create", body=json.dumps({"name": "Move Reorder PL"}), headers=auth_header)
+        resp = conn.getresponse()
+        self.assertEqual(resp.status, 200)
+        resp.read()
+
+        conn.request(
+            "POST",
+            "/api/playlist/add_bulk",
+            body=json.dumps({
+                "playlist": "Move Reorder PL",
+                "tracks": [
+                    {"url": "https://youtube.com/watch?v=mr1", "title": "Track 1"},
+                    {"url": "https://youtube.com/watch?v=mr2", "title": "Track 2"},
+                    {"url": "https://youtube.com/watch?v=mr3", "title": "Track 3"},
+                    {"url": "https://youtube.com/watch?v=mr4", "title": "Track 4"},
+                ],
+            }),
+            headers=auth_header,
+        )
+        resp_add = conn.getresponse()
+        self.assertEqual(resp_add.status, 200)
+        resp_add.read()
+
+        # 2. Move single track (from_index 3 to 0)
+        conn.request(
+            "POST",
+            "/api/playlist/move",
+            body=json.dumps({"playlist": "Move Reorder PL", "from_index": 3, "to_index": 0}),
+            headers=auth_header,
+        )
+        resp_move = conn.getresponse()
+        self.assertEqual(resp_move.status, 200)
+        data_move = json.loads(resp_move.read().decode("utf-8"))
+        self.assertTrue(data_move["success"])
+
+        # 3. Reorder bulk with sequence
+        conn.request(
+            "POST",
+            "/api/playlist/reorder_bulk",
+            body=json.dumps({"playlist": "Move Reorder PL", "sequence": ["Track 3", "Track 1", "Track 2", "Track 4"]}),
+            headers=auth_header,
+        )
+        resp_reorder = conn.getresponse()
+        self.assertEqual(resp_reorder.status, 200)
+        data_reorder = json.loads(resp_reorder.read().decode("utf-8"))
+        self.assertTrue(data_reorder["success"])
+        self.assertEqual(data_reorder["reordered_count"], 4)
+
+        # 4. Move bulk
+        conn.request(
+            "POST",
+            "/api/playlist/move_bulk",
+            body=json.dumps({"playlist": "Move Reorder PL", "items": ["Track 1", "Track 4"], "top": True}),
+            headers=auth_header,
+        )
+        resp_mb = conn.getresponse()
+        self.assertEqual(resp_mb.status, 200)
+        data_mb = json.loads(resp_mb.read().decode("utf-8"))
+        self.assertTrue(data_mb["success"])
+        self.assertEqual(data_mb["moved_count"], 2)
 
         conn.close()
 

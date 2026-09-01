@@ -14,6 +14,11 @@ Usage:
   ./playlist.py remove-bulk <NAME> <ITEM1> <ITEM2> ...
   ./playlist.py remove-bulk <NAME> --file <remove.txt|remove.json>
   ./playlist.py remove-bulk <NAME> -  # Read items to remove from stdin
+  ./playlist.py move <NAME> <FROM_INDEX|TITLE> <TO_INDEX|top|bottom>
+  ./playlist.py move-bulk <NAME> <ITEMS...> [--position N|--after TARGET|--before TARGET|--top|--bottom]
+  ./playlist.py reorder <NAME> <SEQ...>
+  ./playlist.py reorder <NAME> --file <order.txt|order.json>
+  ./playlist.py reorder-bulk <NAME> <SEQ...>
   ./playlist.py delete <NAME>
   ./playlist.py play <NAME> [--shuffle]
   ./playlist.py queue <NAME> [--shuffle]

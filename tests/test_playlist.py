@@ -228,6 +228,30 @@ class TestPlaylistManager(unittest.TestCase):
         remaining_titles = [t["title"] for t in self.playlist_mgr.get_playlist("Bulk Playlist")["tracks"]]
         self.assertEqual(remaining_titles, ["Bulk Song 2", "Bulk Song 4"])
 
+    def test_playlist_move_reorder_and_bulk_move(self):
+        """Verify moving, reordering, and bulk-moving tracks in playlist."""
+        self.playlist_mgr.create_playlist("Reorder PL")
+        for i in range(1, 6):
+            self.playlist_mgr.add_track("Reorder PL", f"https://youtube.com/watch?v=p_{i}", f"Track {i}", auto_fetch=False)
+
+        # 1. Single move (move Track 4 to top #1)
+        res_move = self.playlist_mgr.move_track("Reorder PL", 4, "top")
+        self.assertTrue(res_move["success"])
+        titles1 = [t["title"] for t in self.playlist_mgr.get_playlist("Reorder PL")["tracks"]]
+        self.assertEqual(titles1, ["Track 4", "Track 1", "Track 2", "Track 3", "Track 5"])
+
+        # 2. Bulk reorder with titles
+        res_reorder = self.playlist_mgr.reorder_bulk("Reorder PL", ["Track 5", "Track 2", "Track 4"])
+        self.assertTrue(res_reorder["success"])
+        titles2 = [t["title"] for t in self.playlist_mgr.get_playlist("Reorder PL")["tracks"]]
+        self.assertEqual(titles2, ["Track 5", "Track 2", "Track 4", "Track 1", "Track 3"])
+
+        # 3. Move bulk (move Track 1 and Track 3 to top)
+        res_mb = self.playlist_mgr.move_bulk("Reorder PL", ["Track 1", "Track 3"], order="top")
+        self.assertTrue(res_mb["success"])
+        titles3 = [t["title"] for t in self.playlist_mgr.get_playlist("Reorder PL")["tracks"]]
+        self.assertEqual(titles3, ["Track 1", "Track 3", "Track 5", "Track 2", "Track 4"])
+
 
 if __name__ == "__main__":
     unittest.main()

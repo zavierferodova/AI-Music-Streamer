@@ -207,6 +207,10 @@ Manages persistent named collections stored permanently in the SQLite database.
 | `add-bulk "<NAME>" <TRACKS...> [--file FILE]` | Adds multiple tracks in bulk (supports positional arguments, `--file <txt/json>`, stdin `-`). |
 | `remove "<NAME>" <INDEX_OR_ID...>` | Removes one or more tracks at 1-based indices, IDs, or titles from playlist. |
 | `remove-bulk "<NAME>" <ITEMS...> [--file FILE]` | Removes multiple tracks simultaneously from playlist (supports `--file <txt/json>`, stdin `-`). |
+| `move "<NAME>" <FROM> <TO>` | Moves a track within playlist by index or title to destination (e.g. `top`, `bottom`, `1`). |
+| `move-bulk "<NAME>" <ITEMS...> [OPTIONS]` | Moves multiple tracks as a batch within playlist (supports `--top`, `--bottom`, `--position <N>`, `--after <TARGET>`, `--before <TARGET>`). |
+| `reorder "<NAME>" <ITEMS...> [--file FILE]` | Reorders playlist tracks by index sequence, titles, IDs, sequence files, or stdin `-`. |
+| `reorder-bulk "<NAME>" <SEQ...> [--file FILE]` | Reorders playlist tracks using full or partial sequence. |
 | `play "<NAME>" [--shuffle]` | Loads playlist into queue and starts playback. |
 | `queue "<NAME>"` | Appends playlist tracks to existing playback queue. |
 | `delete "<NAME>"` | Deletes a playlist and its track associations. |

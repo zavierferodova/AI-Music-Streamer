@@ -286,6 +286,233 @@ class PlaylistManager:
             "remaining_count": remaining_count,
         }
 
+    def _find_track_index_in_playlist(self, tracks: List[Dict[str, Any]], query_or_id_or_index: Any) -> Optional[int]:
+        """Helper to find the 0-based index of a track inside a playlist track list."""
+        if not tracks or query_or_id_or_index is None:
+            return None
+
+        if isinstance(query_or_id_or_index, int):
+            if 1 <= query_or_id_or_index <= len(tracks):
+                return query_or_id_or_index - 1
+            elif 0 <= query_or_id_or_index < len(tracks):
+                return query_or_id_or_index
+            return None
+
+        query_str = str(query_or_id_or_index).strip()
+        if query_str.isdigit():
+            val = int(query_str)
+            if 1 <= val <= len(tracks):
+                return val - 1
+            elif val == 0 and len(tracks) > 0:
+                return 0
+
+        for i, t in enumerate(tracks):
+            if t.get("id") == query_str or t.get("url") == query_str:
+                return i
+
+        q_lower = query_str.lower()
+        for i, t in enumerate(tracks):
+            if q_lower in (t.get("title") or "").lower():
+                return i
+
+        from music_streamer.db import calculate_match_similarity
+        best_idx = None
+        best_score = 0.0
+        for i, t in enumerate(tracks):
+            score = calculate_match_similarity(query_str, t.get("title") or "")
+            if score > best_score and score >= 0.5:
+                best_score = score
+                best_idx = i
+
+        return best_idx
+
+    def move_track(self, name_or_id: str, from_item: Any, to_item: Any) -> Dict[str, Any]:
+        """
+        Moves a track within a playlist from `from_item` to `to_item`.
+        `from_item`: 1-based index, ID, URL, or title substring.
+        `to_item`: 1-based index, 'top'/'first', 'bottom'/'last', ID, URL, or title.
+        """
+        pl = self.get_playlist(name_or_id)
+        if not pl:
+            return {"success": False, "error": f"Playlist '{name_or_id}' not found"}
+
+        tracks = pl.get("tracks", [])
+        if not tracks:
+            return {"success": False, "error": "Playlist is empty"}
+
+        from_idx = self._find_track_index_in_playlist(tracks, from_item)
+        if from_idx is None:
+            return {"success": False, "error": f"Source track '{from_item}' not found in playlist"}
+
+        to_str = str(to_item).strip().lower()
+        if to_str in ["top", "first", "start", "0"]:
+            to_idx = 0
+        elif to_str in ["bottom", "last", "end"]:
+            to_idx = len(tracks) - 1
+        else:
+            to_idx = self._find_track_index_in_playlist(tracks, to_item)
+            if to_idx is None:
+                try:
+                    to_idx = int(to_item) - 1
+                except Exception:
+                    pass
+
+        if to_idx is None or not (0 <= to_idx < len(tracks)):
+            return {"success": False, "error": f"Invalid destination position '{to_item}'"}
+
+        ok = self.db.move_playlist_track(pl["id"], from_idx, to_idx)
+        updated_pl = self.get_playlist(pl["id"])
+        return {
+            "success": ok,
+            "playlist": pl["name"],
+            "from_index": from_idx + 1,
+            "to_index": to_idx + 1,
+            "track": updated_pl["tracks"][to_idx] if updated_pl and 0 <= to_idx < len(updated_pl["tracks"]) else None,
+        }
+
+    def reorder_tracks(self, name_or_id: str, track_ids: List[str]) -> Dict[str, Any]:
+        """Reorders playlist tracks given an explicit list of track IDs."""
+        pl = self.get_playlist(name_or_id)
+        if not pl:
+            return {"success": False, "error": f"Playlist '{name_or_id}' not found"}
+        self.db.reorder_playlist_tracks(pl["id"], track_ids)
+        updated_pl = self.get_playlist(pl["id"])
+        return {
+            "success": True,
+            "playlist": pl["name"],
+            "reordered_count": len(track_ids),
+            "tracks": updated_pl.get("tracks", []),
+        }
+
+    def reorder_bulk(self, name_or_id: str, sequence: List[Any]) -> Dict[str, Any]:
+        """
+        Reorders playlist tracks based on a sequence of 1-based indices, track titles, IDs, or URLs.
+        Supports full queue permutations and partial sequence prioritization.
+        """
+        pl = self.get_playlist(name_or_id)
+        if not pl:
+            return {"success": False, "error": f"Playlist '{name_or_id}' not found"}
+
+        tracks = pl.get("tracks", [])
+        if not tracks or not sequence:
+            return {"success": True, "playlist": pl["name"], "reordered_count": 0, "tracks": tracks}
+
+        # Check if full numeric 1-based permutation
+        if len(sequence) == len(tracks) and all(
+            (isinstance(x, int) or (isinstance(x, str) and str(x).isdigit())) for x in sequence
+        ):
+            indices = [int(x) - 1 for x in sequence]
+            if sorted(indices) == list(range(len(tracks))):
+                reordered_ids = [tracks[i]["id"] for i in indices]
+                self.db.reorder_playlist_tracks(pl["id"], reordered_ids)
+                updated_pl = self.get_playlist(pl["id"])
+                return {
+                    "success": True,
+                    "playlist": pl["name"],
+                    "reordered_count": len(reordered_ids),
+                    "tracks": updated_pl.get("tracks", []),
+                }
+
+        resolved_ids = []
+        used_ids = set()
+
+        for item in sequence:
+            idx = self._find_track_index_in_playlist(tracks, item)
+            if idx is not None:
+                tid = tracks[idx]["id"]
+                if tid not in used_ids:
+                    resolved_ids.append(tid)
+                    used_ids.add(tid)
+
+        if not resolved_ids:
+            return {"success": False, "error": "None of the sequence items matched playlist tracks"}
+
+        # Append remaining unmentioned playlist tracks
+        remaining_ids = [t["id"] for t in tracks if t["id"] not in used_ids]
+        final_ids = resolved_ids + remaining_ids
+
+        self.db.reorder_playlist_tracks(pl["id"], final_ids)
+        updated_pl = self.get_playlist(pl["id"])
+        return {
+            "success": True,
+            "playlist": pl["name"],
+            "reordered_count": len(resolved_ids),
+            "tracks": updated_pl.get("tracks", []),
+        }
+
+    def move_bulk(
+        self,
+        name_or_id: str,
+        items: List[Any],
+        order: Optional[str] = None,
+        after: Optional[str] = None,
+        before: Optional[str] = None,
+        position: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Moves multiple playlist tracks together as a contiguous batch to the specified destination.
+        """
+        pl = self.get_playlist(name_or_id)
+        if not pl:
+            return {"success": False, "error": f"Playlist '{name_or_id}' not found"}
+
+        tracks = pl.get("tracks", [])
+        if not tracks or not items:
+            return {"success": True, "playlist": pl["name"], "moved_count": 0, "tracks": tracks}
+
+        selected_tracks = []
+        selected_ids = set()
+
+        for it in items:
+            idx = self._find_track_index_in_playlist(tracks, it)
+            if idx is not None:
+                t = tracks[idx]
+                if t["id"] not in selected_ids:
+                    selected_tracks.append(t)
+                    selected_ids.add(t["id"])
+
+        if not selected_tracks:
+            return {"success": False, "error": "No matching tracks found to move"}
+
+        remaining_tracks = [t for t in tracks if t["id"] not in selected_ids]
+
+        # Determine target index in remaining_tracks
+        target_idx = 0
+        if order in ["top", "first", "next", "start"]:
+            target_idx = 0
+        elif order in ["bottom", "last", "end"]:
+            target_idx = len(remaining_tracks)
+        elif position is not None:
+            try:
+                p_val = int(position)
+                target_idx = max(0, min(len(remaining_tracks), p_val - 1))
+            except Exception:
+                target_idx = 0
+        elif after:
+            a_idx = self._find_track_index_in_playlist(remaining_tracks, after)
+            target_idx = (a_idx + 1) if a_idx is not None else len(remaining_tracks)
+        elif before:
+            b_idx = self._find_track_index_in_playlist(remaining_tracks, before)
+            target_idx = b_idx if b_idx is not None else 0
+        else:
+            target_idx = 0
+
+        final_track_ids = (
+            [t["id"] for t in remaining_tracks[:target_idx]]
+            + [t["id"] for t in selected_tracks]
+            + [t["id"] for t in remaining_tracks[target_idx:]]
+        )
+
+        self.db.reorder_playlist_tracks(pl["id"], final_track_ids)
+        updated_pl = self.get_playlist(pl["id"])
+        return {
+            "success": True,
+            "playlist": pl["name"],
+            "moved_count": len(selected_tracks),
+            "moved_tracks": selected_tracks,
+            "tracks": updated_pl.get("tracks", []),
+        }
+
     def play_playlist(self, name_or_id: str, shuffle: bool = False) -> Dict[str, Any]:
         """
         Loads the playlist tracks into active playback queue and starts playback.

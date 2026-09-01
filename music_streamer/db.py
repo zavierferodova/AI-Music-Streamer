@@ -797,6 +797,40 @@ class DatabaseManager:
             cur.close()
             return deleted
 
+    def reorder_playlist_tracks(self, name_or_id: str, track_ids: List[str]):
+        """Updates sort_order contiguous indices for all track IDs in a playlist."""
+        pl = self.get_playlist(name_or_id)
+        if not pl:
+            return
+        pid = pl["id"]
+        with self.get_connection() as conn:
+            cur = conn.cursor()
+            for idx, tid in enumerate(track_ids):
+                cur.execute(
+                    "UPDATE playlist_tracks SET sort_order = ? WHERE playlist_id = ? AND id = ?;",
+                    (idx, pid, str(tid)),
+                )
+            now = int(time.time())
+            cur.execute("UPDATE playlists SET updated_at = ? WHERE id = ?;", (now, pid))
+            cur.close()
+
+    def move_playlist_track(self, name_or_id: str, from_index: int, to_index: int) -> bool:
+        """Moves a playlist track from from_index to to_index (0-based) in SQLite."""
+        pl = self.get_playlist(name_or_id)
+        if not pl:
+            return False
+        tracks = pl.get("tracks", [])
+        if not tracks or not (0 <= from_index < len(tracks)) or not (0 <= to_index < len(tracks)):
+            return False
+        if from_index == to_index:
+            return True
+
+        track_ids = [t["id"] for t in tracks]
+        moved_id = track_ids.pop(from_index)
+        track_ids.insert(to_index, moved_id)
+        self.reorder_playlist_tracks(pl["id"], track_ids)
+        return True
+
     def search_local_tracks(
         self, query: str, limit: int = 20, playlist_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:

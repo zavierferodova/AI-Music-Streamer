@@ -186,6 +186,27 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(args_rm_bulk.playlist, "Favorites")
         self.assertEqual(args_rm_bulk.target, ["1", "3", "5"])
 
+        args_move = parser.parse_args(["move", "Favorites", "4", "1"])
+        self.assertEqual(args_move.command, "move")
+        self.assertEqual(args_move.playlist, "Favorites")
+        self.assertEqual(args_move.target, ["4", "1"])
+
+        args_mv_bulk = parser.parse_args(["move-bulk", "Favorites", "Song A", "Song B", "--top"])
+        self.assertEqual(args_mv_bulk.command, "move-bulk")
+        self.assertEqual(args_mv_bulk.playlist, "Favorites")
+        self.assertEqual(args_mv_bulk.target, ["Song A", "Song B"])
+        self.assertTrue(args_mv_bulk.top)
+
+        args_reorder = parser.parse_args(["reorder", "Favorites", "3", "1", "2", "4"])
+        self.assertEqual(args_reorder.command, "reorder")
+        self.assertEqual(args_reorder.playlist, "Favorites")
+        self.assertEqual(args_reorder.target, ["3", "1", "2", "4"])
+
+        args_reorder_bulk = parser.parse_args(["reorder-bulk", "Favorites", "--file", "order.txt"])
+        self.assertEqual(args_reorder_bulk.command, "reorder-bulk")
+        self.assertEqual(args_reorder_bulk.playlist, "Favorites")
+        self.assertEqual(args_reorder_bulk.file, "order.txt")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -293,6 +293,12 @@ def build_playlist_parser() -> argparse.ArgumentParser:
             "rm-bulk",
             "remove-many",
             "del-track",
+            "move",
+            "mv-track",
+            "move-bulk",
+            "mv-bulk",
+            "reorder",
+            "reorder-bulk",
             "delete",
             "drop",
             "play",
@@ -302,7 +308,15 @@ def build_playlist_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("playlist", nargs="?", help="Playlist name or ID")
     parser.add_argument("target", nargs="*", help="Track URL, search query, or track index")
-    parser.add_argument("--file", "-f", help="Path to text or JSON file containing tracks to add/remove in bulk")
+    parser.add_argument("--file", "-f", help="Path to text or JSON file containing tracks to add/remove/reorder in bulk")
+    parser.add_argument("--position", help="Insert or move track(s) starting at specific 1-based position")
+    parser.add_argument("--after", help="Insert or move track(s) after specified track (title, URL, index, or ID)")
+    parser.add_argument("--before", help="Insert or move track(s) before specified track (title, URL, index, or ID)")
+    parser.add_argument("--top", action="store_true", help="Move track(s) to top of playlist")
+    parser.add_argument("--bottom", action="store_true", help="Move track(s) to bottom of playlist")
+    parser.add_argument("--next", action="store_true", help="Move track(s) to top of playlist")
+    parser.add_argument("--last", action="store_true", help="Move track(s) to bottom of playlist")
+    parser.add_argument("--order", help="Placement order: 'top', 'bottom', 'after:<target>', 'before:<target>', '<position>'")
     parser.add_argument("-s", "--shuffle", action="store_true", help="Play/Queue in shuffle mode")
     parser.add_argument("-j", "--json", action="store_true", help="Output in JSON format")
     return parser
@@ -1384,6 +1398,191 @@ def handle_playlist(args: argparse.Namespace) -> int:
             return 0
         else:
             print(f"Error: {res.get('error', 'Failed to remove track(s)')}", file=sys.stderr)
+            return 1
+
+    elif cmd in ["move", "mv-track"]:
+        if not pl_name or not targets:
+            print("Usage: playlist.py move <NAME> <FROM_INDEX|TITLE> <TO_INDEX|top|bottom>", file=sys.stderr)
+            return 1
+
+        if len(targets) >= 2:
+            from_target = targets[0]
+            to_target = targets[1]
+            res = playlist_mgr.move_track(pl_name, from_target, to_target)
+            if res.get("success"):
+                t = res.get("track")
+                title_str = f": {t['title']}" if t else ""
+                print(f"✓ Moved track in playlist '{res.get('playlist', pl_name)}' from #{res.get('from_index')} to #{res.get('to_index')}{title_str}")
+                send_ipc_command({"action": "playlist_update"})
+                if args.json:
+                    print(json.dumps(res, indent=2, ensure_ascii=False))
+                return 0
+            else:
+                print(f"Error: {res.get('error', 'Failed to move track')}", file=sys.stderr)
+                return 1
+        elif len(targets) == 1 and (args.top or args.bottom or args.next or args.last or args.position or args.after or args.before or args.order):
+            order = "top" if (args.top or args.next) else ("bottom" if (args.bottom or args.last) else args.order)
+            res = playlist_mgr.move_bulk(pl_name, [targets[0]], order=order, after=args.after, before=args.before, position=args.position)
+            if res.get("success"):
+                print(f"✓ Moved track in playlist '{res.get('playlist', pl_name)}'")
+                send_ipc_command({"action": "playlist_update"})
+                if args.json:
+                    print(json.dumps(res, indent=2, ensure_ascii=False))
+                return 0
+            else:
+                print(f"Error: {res.get('error', 'Failed to move track')}", file=sys.stderr)
+                return 1
+        else:
+            print("Usage: playlist.py move <NAME> <FROM_INDEX|TITLE> <TO_INDEX|top|bottom>", file=sys.stderr)
+            return 1
+
+    elif cmd in ["move-bulk", "mv-bulk"]:
+        if not pl_name:
+            print("Usage: playlist.py move-bulk <NAME> <ITEMS...> [--position N|--after TARGET|--before TARGET|--top|--bottom]", file=sys.stderr)
+            return 1
+
+        items_to_move: List[Any] = []
+
+        # 1. From file if specified
+        file_path = getattr(args, "file", None)
+        if file_path:
+            p = Path(file_path).expanduser().resolve()
+            if not p.exists():
+                print(f"Error: File not found: {file_path}", file=sys.stderr)
+                return 1
+            content = p.read_text(encoding="utf-8").strip()
+            if content.startswith("[") and content.endswith("]"):
+                try:
+                    parsed = json.loads(content)
+                    if isinstance(parsed, list):
+                        items_to_move.extend(parsed)
+                except Exception:
+                    for line in content.splitlines():
+                        if line.strip() and not line.strip().startswith("#"):
+                            items_to_move.append(line.strip())
+            else:
+                for line in content.splitlines():
+                    if line.strip() and not line.strip().startswith("#"):
+                        items_to_move.append(line.strip())
+
+        # 2. From stdin if target is '-'
+        if targets and targets[0] == "-":
+            stdin_content = sys.stdin.read().strip()
+            if stdin_content.startswith("[") and stdin_content.endswith("]"):
+                try:
+                    parsed = json.loads(stdin_content)
+                    if isinstance(parsed, list):
+                        items_to_move.extend(parsed)
+                except Exception:
+                    for line in stdin_content.splitlines():
+                        if line.strip() and not line.strip().startswith("#"):
+                            items_to_move.append(line.strip())
+            else:
+                for line in stdin_content.splitlines():
+                    if line.strip() and not line.strip().startswith("#"):
+                        items_to_move.append(line.strip())
+
+        # 3. From CLI positional targets
+        elif targets:
+            joined = " ".join(targets)
+            if joined.startswith("[") and joined.endswith("]"):
+                try:
+                    parsed = json.loads(joined)
+                    if isinstance(parsed, list):
+                        items_to_move.extend(parsed)
+                except Exception:
+                    items_to_move.extend(targets)
+            else:
+                items_to_move.extend(targets)
+
+        if not items_to_move:
+            print("Usage: playlist.py move-bulk <NAME> <ITEMS...> [--position N|--after TARGET|--before TARGET|--top|--bottom]", file=sys.stderr)
+            return 1
+
+        order = "top" if (args.top or args.next) else ("bottom" if (args.bottom or args.last) else args.order)
+        res = playlist_mgr.move_bulk(pl_name, items_to_move, order=order, after=args.after, before=args.before, position=args.position)
+        if res.get("success"):
+            print(f"✓ Bulk moved {res.get('moved_count', 0)} track(s) in playlist '{res.get('playlist', pl_name)}'")
+            send_ipc_command({"action": "playlist_update"})
+            if args.json:
+                print(json.dumps(res, indent=2, ensure_ascii=False))
+            return 0
+        else:
+            print(f"Error: {res.get('error', 'Failed to move tracks')}", file=sys.stderr)
+            return 1
+
+    elif cmd in ["reorder", "reorder-bulk"]:
+        if not pl_name:
+            print("Usage: playlist.py reorder <NAME> <SEQ...> [--file FILE]", file=sys.stderr)
+            return 1
+
+        items_to_reorder: List[Any] = []
+
+        # 1. From file if specified
+        file_path = getattr(args, "file", None)
+        if file_path:
+            p = Path(file_path).expanduser().resolve()
+            if not p.exists():
+                print(f"Error: File not found: {file_path}", file=sys.stderr)
+                return 1
+            content = p.read_text(encoding="utf-8").strip()
+            if content.startswith("[") and content.endswith("]"):
+                try:
+                    parsed = json.loads(content)
+                    if isinstance(parsed, list):
+                        items_to_reorder.extend(parsed)
+                except Exception:
+                    for line in content.splitlines():
+                        if line.strip() and not line.strip().startswith("#"):
+                            items_to_reorder.append(line.strip())
+            else:
+                for line in content.splitlines():
+                    if line.strip() and not line.strip().startswith("#"):
+                        items_to_reorder.append(line.strip())
+
+        # 2. From stdin if target is '-'
+        if targets and targets[0] == "-":
+            stdin_content = sys.stdin.read().strip()
+            if stdin_content.startswith("[") and stdin_content.endswith("]"):
+                try:
+                    parsed = json.loads(stdin_content)
+                    if isinstance(parsed, list):
+                        items_to_reorder.extend(parsed)
+                except Exception:
+                    for line in stdin_content.splitlines():
+                        if line.strip() and not line.strip().startswith("#"):
+                            items_to_reorder.append(line.strip())
+            else:
+                for line in stdin_content.splitlines():
+                    if line.strip() and not line.strip().startswith("#"):
+                        items_to_reorder.append(line.strip())
+
+        # 3. From CLI positional targets
+        elif targets:
+            joined = " ".join(targets)
+            if joined.startswith("[") and joined.endswith("]"):
+                try:
+                    parsed = json.loads(joined)
+                    if isinstance(parsed, list):
+                        items_to_reorder.extend(parsed)
+                except Exception:
+                    items_to_reorder.extend(targets)
+            else:
+                items_to_reorder.extend(targets)
+
+        if not items_to_reorder:
+            print("Usage: playlist.py reorder <NAME> <SEQ...> (e.g. playlist.py reorder 'Favorites' 3 1 2, playlist.py reorder 'Favorites' 'Song B' 'Song A')", file=sys.stderr)
+            return 1
+
+        res = playlist_mgr.reorder_bulk(pl_name, items_to_reorder)
+        if res.get("success"):
+            print(f"✓ Reordered playlist '{res.get('playlist', pl_name)}' ({res.get('reordered_count', 0)} tracks updated)")
+            send_ipc_command({"action": "playlist_update"})
+            if args.json:
+                print(json.dumps(res, indent=2, ensure_ascii=False))
+            return 0
+        else:
+            print(f"Error: {res.get('error', 'Failed to reorder playlist')}", file=sys.stderr)
             return 1
 
     elif cmd in ["delete", "drop"]:

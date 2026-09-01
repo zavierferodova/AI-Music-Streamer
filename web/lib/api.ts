@@ -213,6 +213,34 @@ export async function removeTrackFromPlaylist(playlist: string, index: number): 
   }
 }
 
+export async function movePlaylistTrack(playlist: string, fromIndex: number, toIndex: number): Promise<boolean> {
+  try {
+    const res = await fetch("/api/playlist/move", {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ playlist, from_index: fromIndex, to_index: toIndex }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.error("movePlaylistTrack error:", err);
+    return false;
+  }
+}
+
+export async function reorderPlaylistTracks(playlist: string, sequence: (string | number)[]): Promise<boolean> {
+  try {
+    const res = await fetch("/api/playlist/reorder", {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ playlist, sequence }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.error("reorderPlaylistTracks error:", err);
+    return false;
+  }
+}
+
 export async function searchMusic(query: string, count: number = 6, includeWeb: boolean = true): Promise<SearchResponse | null> {
   try {
     const res = await fetch(

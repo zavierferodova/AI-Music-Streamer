@@ -1132,6 +1132,39 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
                 self.server.ws_hub.broadcast()
                 self._send_json({"status": "ok" if ok else "error", "removed": ok})
 
+        elif path == "/api/playlist/move":
+            target = payload.get("playlist") or payload.get("name") or payload.get("id")
+            from_idx = payload.get("from_index")
+            to_idx = payload.get("to_index")
+            if target and from_idx is not None and to_idx is not None:
+                res = self.server.playlist_mgr.move_track(target, from_idx, to_idx)
+                self.server.ws_hub.broadcast()
+                self._send_json(res)
+            else:
+                self._send_json({"status": "error", "error": "Missing playlist, from_index, or to_index"})
+
+        elif path in ["/api/playlist/move_bulk", "/api/playlist/bulk_move"]:
+            target = payload.get("playlist") or payload.get("name") or payload.get("id")
+            items = payload.get("items") or payload.get("tracks") or []
+            order = payload.get("order")
+            after = payload.get("after")
+            before = payload.get("before")
+            position = payload.get("position")
+            if payload.get("top") is True or payload.get("next") is True:
+                order = "top"
+            elif payload.get("bottom") is True or payload.get("last") is True:
+                order = "bottom"
+            res = self.server.playlist_mgr.move_bulk(target, items, order=order, after=after, before=before, position=position)
+            self.server.ws_hub.broadcast()
+            self._send_json(res)
+
+        elif path in ["/api/playlist/reorder", "/api/playlist/reorder_bulk", "/api/playlist/bulk_reorder"]:
+            target = payload.get("playlist") or payload.get("name") or payload.get("id")
+            seq = payload.get("sequence") or payload.get("tracks") or payload.get("items") or payload.get("track_ids") or []
+            res = self.server.playlist_mgr.reorder_bulk(target, seq)
+            self.server.ws_hub.broadcast()
+            self._send_json(res)
+
         elif path == "/api/playlist/play":
             target = payload.get("playlist") or payload.get("name") or payload.get("id")
             res = self.server.playlist_mgr.play_playlist(target, shuffle=bool(payload.get("shuffle", False)))

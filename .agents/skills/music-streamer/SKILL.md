@@ -262,6 +262,13 @@ cat tracks.txt | ~/music-streamer/playlist.py add-bulk "Favorites" - # Bulk add 
 ~/music-streamer/playlist.py remove "Favorites" 1 3 5 # Remove multiple tracks by 1-based indices
 ~/music-streamer/playlist.py remove-bulk "Favorites" "Song A" "Song B" # Bulk remove tracks by titles or IDs
 ~/music-streamer/playlist.py remove-bulk "Favorites" --file /path/to/remove.txt # Bulk remove from file
+~/music-streamer/playlist.py move "Favorites" 4 1     # Move 4th track to 1st position
+~/music-streamer/playlist.py move "Favorites" "Song X" top # Move track to top of playlist
+~/music-streamer/playlist.py move-bulk "Favorites" "Song A" "Song B" --top # Move multiple tracks to top
+~/music-streamer/playlist.py move-bulk "Favorites" "Song A" "Song B" --after "Song X" # Move multiple tracks after target
+~/music-streamer/playlist.py reorder "Favorites" 3 1 2 4 # Reorder playlist by 1-based index sequence
+~/music-streamer/playlist.py reorder "Favorites" "Song B" "Song A" # Reorder playlist using track names
+~/music-streamer/playlist.py reorder "Favorites" --file /path/to/order.txt # Reorder from sequence file
 ~/music-streamer/playlist.py play "Favorites"         # Load and play in sequential order
 ~/music-streamer/playlist.py play "Favorites" --shuffle # Load and play in fair shuffle mode
 ~/music-streamer/playlist.py queue "Favorites"        # Append playlist tracks to current queue
