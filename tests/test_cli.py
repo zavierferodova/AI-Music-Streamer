@@ -67,10 +67,22 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(parser.parse_args(["toggle"]).mode, "toggle")
 
     def test_otp_parser(self):
-        """Verify OTP CLI subcommands."""
+        """Verify OTP CLI subcommands and target role arguments."""
         parser = build_otp_parser()
+        self.assertEqual(parser.parse_args(["show"]).command, "show")
         self.assertEqual(parser.parse_args(["new"]).command, "new")
+        self.assertEqual(parser.parse_args(["new"]).target, "all")
+
+        args_admin = parser.parse_args(["new", "admin"])
+        self.assertEqual(args_admin.command, "new")
+        self.assertEqual(args_admin.target, "admin")
+
+        args_sub = parser.parse_args(["new", "subscriber"])
+        self.assertEqual(args_sub.command, "new")
+        self.assertEqual(args_sub.target, "subscriber")
+
         self.assertEqual(parser.parse_args(["on"]).command, "on")
+        self.assertEqual(parser.parse_args(["sessions"]).command, "sessions")
 
     def test_status_parser(self):
         """Verify status CLI arguments."""

@@ -303,6 +303,14 @@ def build_otp_parser() -> argparse.ArgumentParser:
         choices=["show", "status", "new", "generate", "on", "off", "sessions"],
         default="show",
         nargs="?",
+        help="Action to perform",
+    )
+    parser.add_argument(
+        "target",
+        choices=["admin", "subscriber", "all", "both"],
+        default="all",
+        nargs="?",
+        help="Target role for 'new' command (default: all)",
     )
     return parser
 
@@ -965,29 +973,43 @@ def handle_loop(args: argparse.Namespace) -> int:
 
 def handle_otp(args: argparse.Namespace) -> int:
     cmd = args.command or "show"
+    target = getattr(args, "target", "all") or "all"
     lan_ip = get_lan_ip()
 
     if cmd in ["show", "status"]:
         enabled = security.is_enabled()
-        otp = security.get_current_otp()
+        admin_otp = security.get_admin_otp()
+        sub_otp = security.get_subscriber_otp()
         status_str = "🟢 ENABLED (Protected)" if enabled else "⚪ DISABLED (Public)"
-        print("═" * 58)
-        print(" 🔐 MUSIC STREAMER — One-Time Password (OTP) Security")
-        print("═" * 58)
-        print(f"  Security Status   : {status_str}")
-        print(f"  Active OTP Code   : \033[1;36m{otp}\033[0m")
-        print("─" * 58)
-        print("  Direct Authenticated Access Links:")
-        print(f"  Web Control Panel : http://{lan_ip}:{DEFAULT_PORT}/?otp={otp}")
-        print(f"  Live Audio Stream : http://{lan_ip}:{DEFAULT_PORT}/stream.mp3?otp={otp}")
-        print("═" * 58)
-        print("  Commands: ./otp.py new (generate) | ./otp.py on/off (toggle)")
-        print("═" * 58)
+        print("═" * 65)
+        print(" 🔐 MUSIC STREAMER — Two-Tier OTP Security (Admin & Subscriber)")
+        print("═" * 65)
+        print(f"  Security Status       : {status_str}")
+        print("─" * 65)
+        print(f"  👑 ADMIN PASSCODE     : \033[1;32m{admin_otp}\033[0m")
+        print("     Permissions        : Full Server Control, Playback & Playlists")
+        print(f"     Web Control Panel  : http://{lan_ip}:{DEFAULT_PORT}/?otp={admin_otp}")
+        print("─" * 65)
+        print(f"  🎧 SUBSCRIBER PASSCODE: \033[1;36m{sub_otp}\033[0m")
+        print("     Permissions        : Stream & View Tracks Only (Playlists Hidden)")
+        print(f"     Subscriber Player  : http://{lan_ip}:{DEFAULT_PORT}/?otp={sub_otp}")
+        print(f"     Live Audio Stream  : http://{lan_ip}:{DEFAULT_PORT}/stream.mp3?otp={sub_otp}")
+        print("═" * 65)
+        print("  Commands: ./otp.py new [admin|subscriber|all] | ./otp.py on/off")
+        print("═" * 65)
         return 0
 
     elif cmd in ["new", "generate"]:
-        new_otp = security.generate_new_otp()
-        print(f"✓ Generated new OTP Code: \033[1;32m{new_otp}\033[0m")
+        if target == "admin":
+            new_code = security.generate_new_otp(role="admin")
+            print(f"✓ Generated new \033[1;32mADMIN\033[0m OTP Code: \033[1;32m{new_code}\033[0m")
+        elif target == "subscriber":
+            new_code = security.generate_new_otp(role="subscriber")
+            print(f"✓ Generated new \033[1;36mSUBSCRIBER\033[0m OTP Code: \033[1;36m{new_code}\033[0m")
+        else:
+            new_codes = security.generate_new_otp(role="all")
+            print(f"✓ Generated new \033[1;32mADMIN\033[0m OTP Code     : \033[1;32m{new_codes['admin']}\033[0m")
+            print(f"✓ Generated new \033[1;36mSUBSCRIBER\033[0m OTP Code: \033[1;36m{new_codes['subscriber']}\033[0m")
         return 0
 
     elif cmd in ["on", "enable"]:
@@ -1006,7 +1028,8 @@ def handle_otp(args: argparse.Namespace) -> int:
         now = int(time.time())
         for tok, info in sessions.items():
             exp = info.get("expires_at", 0) - now
-            print(f"  - Token: {tok[:8]}... | IP: {info.get('client_ip')} | Expires in: {exp}s")
+            role = info.get("role", "admin").upper()
+            print(f"  - [{role}] Token: {tok[:8]}... | IP: {info.get('client_ip')} | Expires in: {exp}s")
         return 0
 
     return 0
@@ -1025,13 +1048,19 @@ def handle_status(args: argparse.Namespace) -> int:
     stream_url = f"http://{lan_ip}:{DEFAULT_PORT}/stream.mp3"
 
     playback_state = playback_mgr.get_state()
-    otp_code = security.get_current_otp()
+    admin_otp = security.get_admin_otp()
+    sub_otp = security.get_subscriber_otp()
     otp_enabled = security.is_enabled()
 
     if args.json or os.environ.get("JSON") == "1":
         output = {
             "state": state,
-            "security": {"enabled": otp_enabled, "otp": otp_code},
+            "security": {
+                "enabled": otp_enabled,
+                "admin_otp": admin_otp,
+                "subscriber_otp": sub_otp,
+                "otp": admin_otp,
+            },
             "now_playing": {"url": cur_url or None, "title": cur_title or None},
             "volume": {"saved": vol, "alsa": str(get_alsa_volume())},
             "loop": loop_val,
@@ -1085,17 +1114,25 @@ def handle_status(args: argparse.Namespace) -> int:
     else:
         print('   (empty — add with ./playback.py add "<query>")')
 
-    otp_str = f"ENABLED (Code: \033[1;36m{otp_code}\033[0m)" if otp_enabled else "DISABLED (Public)"
-    print(f"🔐 Security OTP : {otp_str}")
+    if otp_enabled:
+        print(f"🔐 Security OTP : \033[1;32mENABLED\033[0m (Protected)")
+        print(f"   👑 Admin OTP : \033[1;33m{admin_otp}\033[0m (Full Control: Playback & Playlists)")
+        print(f"   🎧 Sub OTP   : \033[1;36m{sub_otp}\033[0m (Stream & View Track Only)")
+    else:
+        print(f"🔐 Security OTP : \033[1;33mDISABLED\033[0m (Public Access)")
     srv_status = f"RUNNING (PID {server_pid}, mode: {mode})" if server_pid else "Not running"
     print(f"📡 Stream Server: {srv_status}")
     if server_pid:
         print(f"   Stream URL   : {stream_url}")
+        if otp_enabled:
+            print(f"   Admin Panel  : http://{lan_ip}:{DEFAULT_PORT}/?otp={admin_otp}")
+            print(f"   Sub Stream   : http://{lan_ip}:{DEFAULT_PORT}/stream.mp3?otp={sub_otp}")
         pub_url = db.get_setting("public_url", "")
         if pub_url and is_tunnel_running():
-            otp_param = f"?otp={otp_code}" if otp_enabled else ""
-            print(f"🌐 Public Stream: {pub_url}/stream.mp3{otp_param}")
-            print(f"   Public Player: {pub_url}/{otp_param}")
+            admin_param = f"?otp={admin_otp}" if otp_enabled else ""
+            sub_param = f"?otp={sub_otp}" if otp_enabled else ""
+            print(f"🌐 Public Stream: {pub_url}/stream.mp3{sub_param}")
+            print(f"   Public Admin : {pub_url}/{admin_param}")
 
     return 0
 
@@ -1186,16 +1223,19 @@ def handle_stream(args: argparse.Namespace) -> int:
             print("Connecting persistent public Cloudflare Tunnel for live stream server...", flush=True)
             ok, res_url = start_tunnel(args.port)
             if ok:
-                otp_str = f"?otp={security.get_current_otp()}" if security.is_enabled() else ""
+                admin_otp = security.get_admin_otp()
+                sub_otp = security.get_subscriber_otp()
+                admin_param = f"?otp={admin_otp}" if security.is_enabled() else ""
+                sub_param = f"?otp={sub_otp}" if security.is_enabled() else ""
                 lan_ip = get_lan_ip()
                 print("═" * 60)
                 print(" 🌐 PUBLIC STREAM BROADCAST ACTIVE (Persistent Tunnel)")
                 print("═" * 60)
-                print(f"  Public Web Player : {res_url}/{otp_str}")
-                print(f"  Public MP3 Stream : {res_url}/stream.mp3{otp_str}")
+                print(f"  👑 Public Admin Panel : {res_url}/{admin_param}")
+                print(f"  🎧 Public Sub Stream  : {res_url}/stream.mp3{sub_param}")
                 print("─" * 60)
-                print(f"  Local Web Player  : http://{lan_ip}:{args.port}/{otp_str}")
-                print(f"  Local MP3 Stream  : http://{lan_ip}:{args.port}/stream.mp3{otp_str}")
+                print(f"  👑 Local Admin Panel  : http://{lan_ip}:{args.port}/{admin_param}")
+                print(f"  🎧 Local Sub Stream   : http://{lan_ip}:{args.port}/stream.mp3{sub_param}")
                 print("═" * 60)
                 return 0
             else:
@@ -1250,9 +1290,12 @@ def handle_stream(args: argparse.Namespace) -> int:
                 print("Starting persistent public Cloudflare Tunnel...", flush=True)
                 ok, res_url = start_tunnel(args.port)
                 if ok:
-                    otp_str = f"?otp={security.get_current_otp()}" if security.is_enabled() else ""
-                    print(f"  Public Stream: {res_url}/stream.mp3{otp_str}")
-                    print(f"  Public Player: {res_url}/{otp_str}")
+                    admin_otp = security.get_admin_otp()
+                    sub_otp = security.get_subscriber_otp()
+                    admin_param = f"?otp={admin_otp}" if security.is_enabled() else ""
+                    sub_param = f"?otp={sub_otp}" if security.is_enabled() else ""
+                    print(f"  👑 Public Admin : {res_url}/{admin_param}")
+                    print(f"  🎧 Public Stream: {res_url}/stream.mp3{sub_param}")
                 else:
                     print(f"  Warning: Failed to start public tunnel: {res_url}")
             print(f"  Logs         : {SERVER_LOG_FILE}")
@@ -1278,6 +1321,8 @@ def handle_stream(args: argparse.Namespace) -> int:
         ipc_thread.start()
 
         lan_ip = get_lan_ip()
+        admin_otp = security.get_admin_otp()
+        sub_otp = security.get_subscriber_otp()
         print("=" * 60)
         print(" 🎵 MUSIC STREAMER — Continuous Broadcast & Synced Audio")
         print("=" * 60)
@@ -1286,9 +1331,9 @@ def handle_stream(args: argparse.Namespace) -> int:
         print(f"  Status JSON      : http://{lan_ip}:{args.port}/status")
         print(f"  Output Mode      : {args.mode.upper()}")
         if security.is_enabled():
-            otp_code = security.get_current_otp()
-            print(f"  🔐 Security Status : ENABLED (Active OTP: {otp_code})")
-            print(f"  Direct Unlock Link: http://{lan_ip}:{args.port}/?otp={otp_code}")
+            print(f"  🔐 Security Status : ENABLED (Protected)")
+            print(f"     👑 Admin OTP    : {admin_otp} (http://{lan_ip}:{args.port}/?otp={admin_otp})")
+            print(f"     🎧 Sub OTP      : {sub_otp} (http://{lan_ip}:{args.port}/stream.mp3?otp={sub_otp})")
         else:
             print("  🔓 Security Status : DISABLED (Public Access)")
         print("=" * 60)

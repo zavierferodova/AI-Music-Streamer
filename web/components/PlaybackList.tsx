@@ -18,6 +18,7 @@ import {
   Clock,
   Radio,
   AlertCircle,
+  Eye,
 } from "lucide-react";
 import { ServerStatus } from "@/types";
 import { formatTrackDisplay } from "@/lib/utils";
@@ -25,6 +26,7 @@ import { ConfirmationModal } from "./ConfirmationModal";
 
 interface PlaybackListProps {
   status: ServerStatus | null;
+  isAdmin?: boolean;
   onTogglePlaybackMode: () => void;
   onResetHistory: () => void;
   onClearList: () => void;
@@ -37,6 +39,7 @@ interface PlaybackListProps {
 
 export function PlaybackList({
   status,
+  isAdmin = true,
   onTogglePlaybackMode,
   onResetHistory,
   onClearList,
@@ -59,13 +62,13 @@ export function PlaybackList({
   const playingCount = playback?.playing_count || (status?.state === "playing" ? 1 : 0);
 
   const handleAdd = () => {
-    if (!quickInput.trim()) return;
+    if (!isAdmin || !quickInput.trim()) return;
     onQuickAdd(quickInput.trim());
     setQuickInput("");
   };
 
   const handleInterrupt = () => {
-    if (!quickInput.trim()) return;
+    if (!isAdmin || !quickInput.trim()) return;
     onQuickInterrupt(quickInput.trim());
     setQuickInput("");
   };
@@ -75,8 +78,6 @@ export function PlaybackList({
       handleAdd();
     }
   };
-
-  let upcomingIndex = 1;
 
   return (
     <section className="w-full my-6 p-5 sm:p-6 rounded-3xl bg-slate-900/80 border border-slate-700/60 shadow-xl backdrop-blur-xl">
@@ -88,41 +89,53 @@ export function PlaybackList({
           <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-xs font-semibold text-sky-300">
             {totalCount}
           </span>
+          {!isAdmin && (
+            <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-sky-500/10 border border-sky-500/30 text-[11px] font-semibold text-sky-300">
+              <Eye className="w-3 h-3" />
+              <span>View Only</span>
+            </span>
+          )}
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Mode Toggle Button */}
-          <button
-            onClick={onTogglePlaybackMode}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all hover:scale-105 ${
-              mode === "shuffled"
-                ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
-                : "bg-slate-800/80 text-slate-300 border-slate-700 hover:text-white"
-            }`}
-          >
-            {mode === "shuffled" ? <Shuffle className="w-3.5 h-3.5" /> : <ListOrdered className="w-3.5 h-3.5" />}
-            <span>{mode === "shuffled" ? "Shuffled" : "Ordered"}</span>
-          </button>
+        {isAdmin ? (
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Mode Toggle Button */}
+            <button
+              onClick={onTogglePlaybackMode}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all hover:scale-105 ${
+                mode === "shuffled"
+                  ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
+                  : "bg-slate-800/80 text-slate-300 border-slate-700 hover:text-white"
+              }`}
+            >
+              {mode === "shuffled" ? <Shuffle className="w-3.5 h-3.5" /> : <ListOrdered className="w-3.5 h-3.5" />}
+              <span>{mode === "shuffled" ? "Shuffled" : "Ordered"}</span>
+            </button>
 
-          {/* Replay All */}
-          <button
-            onClick={onResetHistory}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-300 hover:text-white transition-all hover:scale-105"
-            title="Reset played history for a fresh replay cycle"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Replay All</span>
-          </button>
+            {/* Replay All */}
+            <button
+              onClick={onResetHistory}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-300 hover:text-white transition-all hover:scale-105"
+              title="Reset played history for a fresh replay cycle"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Replay All</span>
+            </button>
 
-          {/* Clear List */}
-          <button
-            onClick={() => setIsConfirmClearOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-rose-500/20 border border-slate-700 hover:border-rose-500/40 text-xs font-semibold text-slate-400 hover:text-rose-300 transition-all hover:scale-105"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Clear List</span>
-          </button>
-        </div>
+            {/* Clear List */}
+            <button
+              onClick={() => setIsConfirmClearOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-rose-500/20 border border-slate-700 hover:border-rose-500/40 text-xs font-semibold text-slate-400 hover:text-rose-300 transition-all hover:scale-105"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Clear List</span>
+            </button>
+          </div>
+        ) : (
+          <div className="text-xs text-slate-400 font-medium">
+            Mode: <strong className="text-slate-200 capitalize">{mode}</strong>
+          </div>
+        )}
       </div>
 
       {/* Summary Pills */}
@@ -145,7 +158,7 @@ export function PlaybackList({
       <div className="max-h-[380px] overflow-y-auto space-y-2 pr-1">
         {tracks.length === 0 ? (
           <div className="py-8 text-center text-xs text-slate-400">
-            Playback list is currently empty. Add tracks below or search YouTube.
+            Playback list is currently empty.
           </div>
         ) : (
           tracks.map((track, idx) => {
@@ -212,81 +225,94 @@ export function PlaybackList({
                   </div>
                 </div>
 
-                {/* Track Actions */}
-                <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
-                  {status === "playing" ? (
-                    <span className="text-[11px] text-emerald-400 font-semibold px-2">Active</span>
-                  ) : status === "played" ? (
-                    <button
-                      onClick={() => onPlayTrack(idx)}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-700/60 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-all"
-                      title="Replay this track"
-                    >
-                      <RotateCw className="w-3.5 h-3.5" />
-                      <span>Replay</span>
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => onPlayTrack(idx)}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 text-xs font-semibold border border-sky-500/40 transition-all"
-                      title="Play now"
-                    >
-                      <Play className="w-3.5 h-3.5 fill-sky-300" />
-                      <span>Play Now</span>
-                    </button>
-                  )}
+                {/* Track Actions (Admin only) */}
+                {isAdmin ? (
+                  <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+                    {status === "playing" || status === "played" ? (
+                      <button
+                        onClick={() => onPlayTrack(idx)}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-700/60 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-all"
+                        title="Replay this track"
+                      >
+                        <RotateCw className="w-3.5 h-3.5" />
+                        <span>Replay</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => onPlayTrack(idx)}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 text-xs font-semibold border border-sky-500/40 transition-all"
+                        title="Play now"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-sky-300" />
+                        <span>Play Now</span>
+                      </button>
+                    )}
 
-                  <button
-                    onClick={() => onSaveToPlaylist(track.url, track.title, thumb || undefined)}
-                    className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
-                    title="Save to Playlist"
-                  >
-                    <BookmarkPlus className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setTrackToDelete({ index: idx, title: display.title })}
-                    className="p-1.5 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                    title="Remove track"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
+                    <button
+                      onClick={() => onSaveToPlaylist(track.url, track.title, thumb || undefined)}
+                      className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+                      title="Save to Playlist"
+                    >
+                      <BookmarkPlus className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setTrackToDelete({ index: idx, title: display.title })}
+                      className="p-1.5 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                      title="Remove track"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-slate-500 font-medium self-end sm:self-center">
+                    {status === "playing" ? (
+                      <span className="text-emerald-400 font-semibold">Broadcasting</span>
+                    ) : status === "played" ? (
+                      <span>Completed</span>
+                    ) : (
+                      <span>Queued</span>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })
         )}
       </div>
 
-      {/* Quick Add / Interrupt Bar */}
-      <div className="flex flex-col sm:flex-row items-center gap-2.5 mt-5 pt-4 border-t border-slate-800">
-        <input
-          type="text"
-          value={quickInput}
-          onChange={(e) => setQuickInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Paste YouTube URL or song name..."
-          className="w-full sm:flex-1 rounded-2xl bg-slate-800/80 border border-slate-700 text-sm text-white placeholder-slate-400 px-4 py-2.5 outline-none focus:border-sky-500/50"
-        />
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <button
-            onClick={handleAdd}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 text-xs font-semibold border border-sky-500/40 shadow-sm transition-all hover:scale-105 active:scale-95"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add to List</span>
-          </button>
-          <button
-            onClick={handleInterrupt}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-semibold shadow-md shadow-sky-500/20 transition-all hover:scale-105 active:scale-95"
-          >
-            <Zap className="w-4 h-4 fill-white" />
-            <span>Play Now</span>
-          </button>
+      {/* Quick Add / Interrupt Bar (Admin only) */}
+      {isAdmin && (
+        <div className="flex flex-col sm:flex-row items-center gap-2.5 mt-5 pt-4 border-t border-slate-800">
+          <input
+            type="text"
+            value={quickInput}
+            onChange={(e) => setQuickInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Paste YouTube URL or song name..."
+            className="w-full sm:flex-1 rounded-2xl bg-slate-800/80 border border-slate-700 text-sm text-white placeholder-slate-400 px-4 py-2.5 outline-none focus:border-sky-500/50"
+          />
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <button
+              onClick={handleAdd}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 text-xs font-semibold border border-sky-500/40 shadow-sm transition-all hover:scale-105 active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add to List</span>
+            </button>
+            <button
+              onClick={handleInterrupt}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-semibold shadow-md shadow-sky-500/20 transition-all hover:scale-105 active:scale-95"
+            >
+              <Zap className="w-4 h-4 fill-white" />
+              <span>Play Now</span>
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Duplicate Notice */}
-      {Boolean(quickInput.trim()) &&
+      {isAdmin &&
+        Boolean(quickInput.trim()) &&
         tracks.some(
           (t) =>
             t.url?.trim().toLowerCase() === quickInput.trim().toLowerCase() ||

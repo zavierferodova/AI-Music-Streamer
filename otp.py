@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-otp.py — One-Time Password (OTP) & Stream Security Manager
+otp.py — Two-Tier One-Time Password (OTP) & Stream Security Manager
 Usage:
-  ./otp.py               # Show current active OTP and quick access links
-  ./otp.py new           # Generate a new OTP code
-  ./otp.py on            # Enable OTP security protection
-  ./otp.py off           # Disable OTP security protection
-  ./otp.py sessions      # List active authenticated sessions
+  ./otp.py                          # Show Admin & Subscriber OTPs and quick access links
+  ./otp.py new [admin|subscriber]   # Generate new OTP code (admin, subscriber, or all)
+  ./otp.py on                       # Enable OTP security protection
+  ./otp.py off                      # Disable OTP security protection
+  ./otp.py sessions                 # List active authenticated sessions with roles
 """
 
 import sys

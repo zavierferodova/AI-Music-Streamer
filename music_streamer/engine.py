@@ -30,7 +30,7 @@ from music_streamer.playback import PlaybackManager, get_thumbnail_for_url, play
 class Broadcaster:
     """Thread-safe fan-out broadcaster for distributing MP3 stream to multiple HTTP clients."""
 
-    def __init__(self, max_buffer_bytes: int = 65536):
+    def __init__(self, max_buffer_bytes: int = 8192):
         self.subscribers: Set[queue.Queue] = set()
         self.lock = threading.Lock()
         self.recent_buffer = bytearray()
@@ -206,6 +206,10 @@ class AudioEngine:
                 "-hide_banner",
                 "-loglevel",
                 "error",
+                "-fflags",
+                "nobuffer",
+                "-flags",
+                "low_delay",
                 "-f",
                 "s16le",
                 "-ar",
@@ -220,6 +224,8 @@ class AudioEngine:
                 "128k",
                 "-flush_packets",
                 "1",
+                "-muxdelay",
+                "0",
                 "-f",
                 "mp3",
                 "pipe:1",

@@ -154,12 +154,19 @@ class DatabaseManager:
                 CREATE TABLE IF NOT EXISTS otp_sessions (
                     token TEXT PRIMARY KEY,
                     client_ip TEXT NOT NULL,
+                    role TEXT NOT NULL DEFAULT 'admin',
                     created_at INTEGER NOT NULL,
                     expires_at INTEGER NOT NULL
                 );
                 """
             )
             cur.execute("CREATE INDEX IF NOT EXISTS idx_otp_expires ON otp_sessions(expires_at);")
+
+            # Check and migrate role column if existing database had older schema
+            cur.execute("PRAGMA table_info(otp_sessions);")
+            otp_cols = [r["name"] for r in cur.fetchall()]
+            if "role" not in otp_cols:
+                cur.execute("ALTER TABLE otp_sessions ADD COLUMN role TEXT NOT NULL DEFAULT 'admin';")
 
             # Playlists Schema
             cur.execute(
@@ -470,6 +477,7 @@ class DatabaseManager:
         self,
         token: str,
         client_ip: str = "unknown",
+        role: str = "admin",
         duration_seconds: int = SESSION_DURATION_SECONDS,
     ) -> str:
         with self.get_connection() as conn:
@@ -478,11 +486,11 @@ class DatabaseManager:
             expires_at = now + duration_seconds
             cur.execute(
                 """
-                INSERT INTO otp_sessions (token, client_ip, created_at, expires_at)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(token) DO UPDATE SET client_ip = excluded.client_ip, expires_at = excluded.expires_at;
+                INSERT INTO otp_sessions (token, client_ip, role, created_at, expires_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(token) DO UPDATE SET client_ip = excluded.client_ip, role = excluded.role, expires_at = excluded.expires_at;
                 """,
-                (token, client_ip, now, expires_at),
+                (token, client_ip, role, now, expires_at),
             )
             cur.close()
             return token
@@ -508,6 +516,20 @@ class DatabaseManager:
             row = cur.fetchone()
             cur.close()
             return row is not None
+
+    def get_session_role(self, token: str) -> Optional[str]:
+        if not token:
+            return None
+        with self.get_connection() as conn:
+            cur = conn.cursor()
+            now = int(time.time())
+            cur.execute(
+                "SELECT role FROM otp_sessions WHERE token = ? AND expires_at > ?;",
+                (token, now),
+            )
+            row = cur.fetchone()
+            cur.close()
+            return row["role"] if row else None
 
     def prune_expired_sessions(self):
         with self.get_connection() as conn:

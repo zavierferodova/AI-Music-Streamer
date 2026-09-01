@@ -4,6 +4,7 @@ import {
   Playlist,
   SearchResponse,
   ServerStatus,
+  UserRole,
 } from "@/types";
 
 export function getAuthToken(): string | null {
@@ -16,9 +17,20 @@ export function setAuthToken(token: string) {
   localStorage.setItem("music_token", token);
 }
 
+export function getAuthRole(): UserRole | null {
+  if (typeof window === "undefined") return null;
+  return (localStorage.getItem("music_role") as UserRole) || null;
+}
+
+export function setAuthRole(role: UserRole) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem("music_role", role);
+}
+
 export function clearAuthToken() {
   if (typeof window === "undefined") return;
   localStorage.removeItem("music_token");
+  localStorage.removeItem("music_role");
 }
 
 function getHeaders(customHeaders: Record<string, string> = {}): Record<string, string> {
@@ -54,7 +66,11 @@ export async function checkAuthStatus(): Promise<AuthStatusResponse | null> {
       cache: "no-store",
     });
     if (!res.ok) return null;
-    return await res.json();
+    const data: AuthStatusResponse = await res.json();
+    if (data.authenticated && data.role) {
+      setAuthRole(data.role);
+    }
+    return data;
   } catch (err) {
     console.error("checkAuthStatus error:", err);
     return null;
@@ -68,9 +84,12 @@ export async function verifyOtp(otp: string): Promise<AuthVerifyResponse> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ otp }),
     });
-    const data = await res.json();
+    const data: AuthVerifyResponse = await res.json();
     if (res.ok && data.authenticated && data.token) {
       setAuthToken(data.token);
+      if (data.role) {
+        setAuthRole(data.role);
+      }
     }
     return data;
   } catch (err: any) {

@@ -123,23 +123,29 @@ class TestDatabaseManager(unittest.TestCase):
         self.assertEqual([t["id"] for t in ordered], [t3["id"], t1["id"], t2["id"]])
 
     def test_otp_sessions(self):
-        """Verify session creation, lookup, and expiration pruning."""
-        token1 = self.db.create_session(token="tok1", client_ip="192.168.1.10", duration_seconds=3600)
-        token2 = self.db.create_session(token="tok2", client_ip="192.168.1.20", duration_seconds=-10)  # Expired
+        """Verify session creation with role, lookup, role validation, and expiration pruning."""
+        token1 = self.db.create_session(token="tok1", client_ip="192.168.1.10", role="admin", duration_seconds=3600)
+        token2 = self.db.create_session(token="tok2", client_ip="192.168.1.20", role="subscriber", duration_seconds=-10)  # Expired
+        token3 = self.db.create_session(token="tok3", client_ip="192.168.1.30", role="subscriber", duration_seconds=3600)
 
         self.assertTrue(self.db.validate_session("tok1"))
         self.assertFalse(self.db.validate_session("tok2"))
+        self.assertTrue(self.db.validate_session("tok3"))
         self.assertFalse(self.db.validate_session("invalid_tok"))
 
         session1 = self.db.get_session("tok1")
         self.assertIsNotNone(session1)
         self.assertEqual(session1["client_ip"], "192.168.1.10")
+        self.assertEqual(session1["role"], "admin")
+        self.assertEqual(self.db.get_session_role("tok1"), "admin")
+        self.assertEqual(self.db.get_session_role("tok3"), "subscriber")
 
         # Prune expired
         self.db.prune_expired_sessions()
         all_sessions = self.db.get_all_active_sessions()
         self.assertIn("tok1", all_sessions)
         self.assertNotIn("tok2", all_sessions)
+        self.assertIn("tok3", all_sessions)
 
     def test_fuzzy_search_and_normalization(self):
         """Verify search_local_tracks matches queries regardless of apostrophes and punctuation."""

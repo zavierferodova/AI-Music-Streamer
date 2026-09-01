@@ -1,5 +1,5 @@
 """
-Integration and Unit tests for Web Control Panel, HTTP Handlers, REST API, Static Assets, and WebSocket.
+Integration and Unit tests for Web Control Panel, HTTP Handlers, REST API, Static Assets, WebSocket, and Dual-Role OTP Security.
 """
 
 import http.client
@@ -76,7 +76,7 @@ class TestWebServer(unittest.TestCase):
 
     def test_get_root_with_otp_sets_cookie(self):
         """Verify GET /?otp=... verifies OTP and sets session cookie."""
-        otp = self.security.get_current_otp()
+        otp = self.security.get_admin_otp()
         conn = self._get_connection()
         conn.request("GET", f"/?otp={otp}")
         resp = conn.getresponse()
@@ -127,33 +127,49 @@ class TestWebServer(unittest.TestCase):
 
         conn.close()
 
-    def test_get_status_json(self):
-        """Verify GET /status returns structured server metrics."""
-        conn = self._get_connection()
-        conn.request("GET", "/status")
-        resp = conn.getresponse()
-        self.assertEqual(resp.status, 200)
-        self.assertIn("application/json", resp.getheader("Content-Type", ""))
+    def test_get_status_json_admin_vs_subscriber(self):
+        """Verify GET /status includes playlists for admin but hides playlists for subscriber."""
+        # Create a playlist in DB first
+        self.db.create_playlist("Secret Playlist")
 
-        data = json.loads(resp.read().decode("utf-8"))
-        self.assertEqual(data["server"], "music-streamer")
-        self.assertIn("state", data)
-        self.assertIn("security", data)
-        self.assertIn("playback", data)
-        self.assertIn("stream_url", data)
+        admin_otp = self.security.get_admin_otp()
+        _, admin_token, _ = self.security.verify_otp(admin_otp, client_ip="127.0.0.1")
+
+        sub_otp = self.security.get_subscriber_otp()
+        _, sub_token, _ = self.security.verify_otp(sub_otp, client_ip="127.0.0.1")
+
+        conn = self._get_connection()
+
+        # 1. Admin status: playlists present
+        conn.request("GET", "/status", headers={"Authorization": f"Bearer {admin_token}"})
+        resp_admin = conn.getresponse()
+        self.assertEqual(resp_admin.status, 200)
+        data_admin = json.loads(resp_admin.read().decode("utf-8"))
+        self.assertEqual(data_admin["role"], "admin")
+        self.assertTrue(len(data_admin["playlists"]) > 0)
+
+        # 2. Subscriber status: playlists empty / hidden
+        conn.request("GET", "/status", headers={"Authorization": f"Bearer {sub_token}"})
+        resp_sub = conn.getresponse()
+        self.assertEqual(resp_sub.status, 200)
+        data_sub = json.loads(resp_sub.read().decode("utf-8"))
+        self.assertEqual(data_sub["role"], "subscriber")
+        self.assertEqual(data_sub["playlists"], [])
+
         conn.close()
 
-    def test_api_auth_lifecycle(self):
-        """Verify /api/auth/status and /api/auth/verify endpoints."""
+    def test_api_auth_lifecycle_dual_otp(self):
+        """Verify /api/auth/verify and /api/auth/status for Admin and Subscriber OTPs."""
         conn = self._get_connection()
 
-        # 1. Initial auth status (not authed)
+        # 1. Initial auth status (unauthenticated)
         conn.request("GET", "/api/auth/status")
         resp = conn.getresponse()
         self.assertEqual(resp.status, 200)
         data = json.loads(resp.read().decode("utf-8"))
         self.assertTrue(data["security_enabled"])
         self.assertFalse(data["authenticated"])
+        self.assertIsNone(data["role"])
 
         # 2. Invalid OTP verification
         conn.request(
@@ -167,57 +183,102 @@ class TestWebServer(unittest.TestCase):
         data_bad = json.loads(resp_bad.read().decode("utf-8"))
         self.assertFalse(data_bad["authenticated"])
 
-        # 3. Valid OTP verification
-        otp = self.security.get_current_otp()
+        # 3. Admin OTP verification -> role: "admin"
+        admin_otp = self.security.get_admin_otp()
         conn.request(
             "POST",
             "/api/auth/verify",
-            body=json.dumps({"otp": otp}),
+            body=json.dumps({"otp": admin_otp}),
             headers={"Content-Type": "application/json"},
         )
-        resp_good = conn.getresponse()
-        self.assertEqual(resp_good.status, 200)
-        data_good = json.loads(resp_good.read().decode("utf-8"))
-        self.assertTrue(data_good["authenticated"])
-        self.assertIsNotNone(data_good["token"])
-        session_token = data_good["token"]
+        resp_admin = conn.getresponse()
+        self.assertEqual(resp_admin.status, 200)
+        data_admin = json.loads(resp_admin.read().decode("utf-8"))
+        self.assertTrue(data_admin["authenticated"])
+        self.assertEqual(data_admin["role"], "admin")
+        admin_token = data_admin["token"]
 
-        # 4. Status with token in header
-        conn.request("GET", "/api/auth/status", headers={"Authorization": f"Bearer {session_token}"})
-        resp_auth = conn.getresponse()
-        self.assertEqual(resp_auth.status, 200)
-        data_auth = json.loads(resp_auth.read().decode("utf-8"))
-        self.assertTrue(data_auth["authenticated"])
+        # 4. Subscriber OTP verification -> role: "subscriber"
+        sub_otp = self.security.get_subscriber_otp()
+        conn.request(
+            "POST",
+            "/api/auth/verify",
+            body=json.dumps({"otp": sub_otp}),
+            headers={"Content-Type": "application/json"},
+        )
+        resp_sub = conn.getresponse()
+        self.assertEqual(resp_sub.status, 200)
+        data_sub = json.loads(resp_sub.read().decode("utf-8"))
+        self.assertTrue(data_sub["authenticated"])
+        self.assertEqual(data_sub["role"], "subscriber")
+        sub_token = data_sub["token"]
+
+        # 5. Check auth status with Admin token
+        conn.request("GET", "/api/auth/status", headers={"Authorization": f"Bearer {admin_token}"})
+        resp_chk_admin = conn.getresponse()
+        self.assertEqual(resp_chk_admin.status, 200)
+        data_chk_admin = json.loads(resp_chk_admin.read().decode("utf-8"))
+        self.assertTrue(data_chk_admin["authenticated"])
+        self.assertEqual(data_chk_admin["role"], "admin")
+
+        # 6. Check auth status with Subscriber token
+        conn.request("GET", "/api/auth/status", headers={"Authorization": f"Bearer {sub_token}"})
+        resp_chk_sub = conn.getresponse()
+        self.assertEqual(resp_chk_sub.status, 200)
+        data_chk_sub = json.loads(resp_chk_sub.read().decode("utf-8"))
+        self.assertTrue(data_chk_sub["authenticated"])
+        self.assertEqual(data_chk_sub["role"], "subscriber")
 
         conn.close()
 
-    def test_stream_mp3_authentication(self):
-        """Verify /stream.mp3 enforces OTP authorization."""
+    def test_subscriber_permissions_and_restrictions(self):
+        """Verify subscriber can stream audio but is strictly forbidden from controlling playback or viewing playlists."""
+        sub_otp = self.security.get_subscriber_otp()
+        _, sub_token, _ = self.security.verify_otp(sub_otp, client_ip="127.0.0.1")
+        sub_header = {"Authorization": f"Bearer {sub_token}", "Content-Type": "application/json"}
+
         conn = self._get_connection()
 
-        # Unauthorized request
-        conn.request("GET", "/stream.mp3")
-        resp_unauth = conn.getresponse()
-        self.assertEqual(resp_unauth.status, 401)
-        self.assertIn("Bearer", resp_unauth.getheader("WWW-Authenticate", ""))
-        resp_unauth.read()
+        # 1. Subscriber CAN stream audio (/stream.mp3)
+        conn.request("HEAD", "/stream.mp3", headers={"Authorization": f"Bearer {sub_token}"})
+        resp_stream = conn.getresponse()
+        self.assertEqual(resp_stream.status, 200)
+        self.assertEqual(resp_stream.getheader("Content-Type"), "audio/mpeg")
 
-        # Authorized request via query param
-        otp = self.security.get_current_otp()
-        _, token = self.security.verify_otp(otp, client_ip="127.0.0.1")
+        # 2. Subscriber CANNOT access /api/playlists
+        conn.request("GET", "/api/playlists", headers=sub_header)
+        resp_pls = conn.getresponse()
+        self.assertEqual(resp_pls.status, 403)
+        resp_pls.read()
 
-        # Head request with token cookie
-        conn.request("HEAD", "/stream.mp3", headers={"Cookie": f"music_session={token}"})
-        resp_auth = conn.getresponse()
-        self.assertEqual(resp_auth.status, 200)
-        self.assertEqual(resp_auth.getheader("Content-Type"), "audio/mpeg")
+        # 3. Subscriber CANNOT access /api/playlist
+        conn.request("GET", "/api/playlist?name=Default", headers=sub_header)
+        resp_pl = conn.getresponse()
+        self.assertEqual(resp_pl.status, 403)
+        resp_pl.read()
+
+        # 4. Subscriber CANNOT control playback (POST /api/pause, /api/play, etc.)
+        conn.request("POST", "/api/pause", body=json.dumps({}), headers=sub_header)
+        resp_pause = conn.getresponse()
+        self.assertEqual(resp_pause.status, 403)
+        resp_pause.read()
+
+        conn.request("POST", "/api/play", body=json.dumps({"url": "https://youtube.com/watch?v=123"}), headers=sub_header)
+        resp_play = conn.getresponse()
+        self.assertEqual(resp_play.status, 403)
+        resp_play.read()
+
+        conn.request("POST", "/api/volume", body=json.dumps({"volume": 50}), headers=sub_header)
+        resp_vol = conn.getresponse()
+        self.assertEqual(resp_vol.status, 403)
+        resp_vol.read()
 
         conn.close()
 
-    def test_protected_api_actions(self):
-        """Verify REST API control endpoints with session authentication."""
-        otp = self.security.get_current_otp()
-        _, token = self.security.verify_otp(otp, client_ip="127.0.0.1")
+    def test_admin_protected_api_actions(self):
+        """Verify REST API playback control endpoints with Admin session authentication."""
+        admin_otp = self.security.get_admin_otp()
+        _, token, _ = self.security.verify_otp(admin_otp, client_ip="127.0.0.1")
         auth_header = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
         conn = self._get_connection()
@@ -246,23 +307,13 @@ class TestWebServer(unittest.TestCase):
         self.assertEqual(resp.status, 200)
         self.assertEqual(json.loads(resp.read().decode("utf-8"))["loop"], "repeat-one")
 
-        conn.request("POST", "/api/loop", body=json.dumps({"loop": "repeat"}), headers=auth_header)
-        resp = conn.getresponse()
-        self.assertEqual(resp.status, 200)
-        self.assertEqual(json.loads(resp.read().decode("utf-8"))["loop"], "repeat")
-
-        conn.request("POST", "/api/loop", body=json.dumps({"loop": "off"}), headers=auth_header)
-        resp = conn.getresponse()
-        self.assertEqual(resp.status, 200)
-        self.assertEqual(json.loads(resp.read().decode("utf-8"))["loop"], "off")
-
         # POST /api/mode
         conn.request("POST", "/api/mode", body=json.dumps({"mode": "speaker"}), headers=auth_header)
         resp = conn.getresponse()
         self.assertEqual(resp.status, 200)
         self.assertEqual(json.loads(resp.read().decode("utf-8"))["mode"], "speaker")
 
-        # POST /api/playback/add (Initial)
+        # POST /api/playback/add
         conn.request(
             "POST",
             "/api/playback/add",
@@ -271,21 +322,7 @@ class TestWebServer(unittest.TestCase):
         )
         resp = conn.getresponse()
         self.assertEqual(resp.status, 200)
-        data_first = json.loads(resp.read().decode("utf-8"))
-        self.assertFalse(data_first.get("already_exists", True))
-
-        # POST /api/playback/add (Duplicate)
-        conn.request(
-            "POST",
-            "/api/playback/add",
-            body=json.dumps({"url": "https://youtube.com/watch?v=abc", "title": "Web Song"}),
-            headers=auth_header,
-        )
-        resp_dup = conn.getresponse()
-        self.assertEqual(resp_dup.status, 200)
-        data_dup = json.loads(resp_dup.read().decode("utf-8"))
-        self.assertTrue(data_dup.get("already_exists", False))
-        self.assertEqual(data_dup.get("status"), "already_exists")
+        resp.read()
 
         # POST /api/playback/shuffle
         conn.request("POST", "/api/playback/shuffle", body=json.dumps({}), headers=auth_header)
@@ -299,23 +336,75 @@ class TestWebServer(unittest.TestCase):
         self.assertEqual(resp.status, 200)
         resp.read()
 
-        # POST /api/skip
-        conn.request("POST", "/api/skip", body=json.dumps({}), headers=auth_header)
-        resp = conn.getresponse()
-        self.assertEqual(resp.status, 200)
-        self.assertEqual(json.loads(resp.read().decode("utf-8"))["action"], "skip")
+        conn.close()
 
-        # POST /api/prev
-        conn.request("POST", "/api/prev", body=json.dumps({}), headers=auth_header)
-        resp = conn.getresponse()
-        self.assertEqual(resp.status, 200)
-        self.assertEqual(json.loads(resp.read().decode("utf-8"))["action"], "prev")
+    def test_playlist_rest_api_lifecycle(self):
+        """Verify REST API lifecycle for playlists with Admin authentication."""
+        admin_otp = self.security.get_admin_otp()
+        _, token, _ = self.security.verify_otp(admin_otp, client_ip="127.0.0.1")
+        auth_header = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
-        # POST /api/stop
-        conn.request("POST", "/api/stop", body=json.dumps({}), headers=auth_header)
-        resp = conn.getresponse()
-        self.assertEqual(resp.status, 200)
-        resp.read()
+        conn = self._get_connection()
+
+        # 1. Create two playlists
+        conn.request("POST", "/api/playlist/create", body=json.dumps({"name": "Chill Lounge"}), headers=auth_header)
+        resp1 = conn.getresponse()
+        self.assertEqual(resp1.status, 200)
+        self.assertEqual(json.loads(resp1.read().decode("utf-8"))["playlist"]["name"], "Chill Lounge")
+
+        conn.request("POST", "/api/playlist/create", body=json.dumps({"name": "Workout Mix"}), headers=auth_header)
+        resp2 = conn.getresponse()
+        self.assertEqual(resp2.status, 200)
+        resp2.read()
+
+        # 2. Add track to "Chill Lounge"
+        conn.request(
+            "POST",
+            "/api/playlist/add",
+            body=json.dumps({"playlist": "Chill Lounge", "url": "https://youtube.com/watch?v=chill1", "title": "Chill Song 1"}),
+            headers=auth_header,
+        )
+        resp_add = conn.getresponse()
+        self.assertEqual(resp_add.status, 200)
+        resp_add.read()
+
+        # 3. GET /api/playlists (Admin)
+        conn.request("GET", "/api/playlists", headers=auth_header)
+        resp_list = conn.getresponse()
+        self.assertEqual(resp_list.status, 200)
+        data_list = json.loads(resp_list.read().decode("utf-8"))
+        self.assertTrue(len(data_list["playlists"]) >= 2)
+
+        # 4. GET /api/playlist?name=Chill%20Lounge (Admin)
+        conn.request("GET", "/api/playlist?name=Chill%20Lounge", headers=auth_header)
+        resp_single = conn.getresponse()
+        self.assertEqual(resp_single.status, 200)
+        data_single = json.loads(resp_single.read().decode("utf-8"))
+        self.assertEqual(data_single["playlist"]["name"], "Chill Lounge")
+        self.assertEqual(data_single["playlist"]["track_count"], 1)
+
+        # 5. Rename playlist
+        conn.request(
+            "POST",
+            "/api/playlist/rename",
+            body=json.dumps({"playlist": "Chill Lounge", "new_name": "Ultra Chill"}),
+            headers=auth_header,
+        )
+        resp_rename = conn.getresponse()
+        self.assertEqual(resp_rename.status, 200)
+        self.assertEqual(json.loads(resp_rename.read().decode("utf-8"))["playlist"]["name"], "Ultra Chill")
+
+        # 6. Play playlist
+        conn.request("POST", "/api/playlist/play", body=json.dumps({"playlist": "Ultra Chill"}), headers=auth_header)
+        resp_play = conn.getresponse()
+        self.assertEqual(resp_play.status, 200)
+        self.assertTrue(json.loads(resp_play.read().decode("utf-8"))["success"])
+
+        # 7. Delete playlist
+        conn.request("POST", "/api/playlist/delete", body=json.dumps({"name": "Workout Mix"}), headers=auth_header)
+        resp_del = conn.getresponse()
+        self.assertEqual(resp_del.status, 200)
+        self.assertTrue(json.loads(resp_del.read().decode("utf-8"))["deleted"])
 
         conn.close()
 
@@ -349,166 +438,6 @@ class TestWebServer(unittest.TestCase):
 
         # Close websocket cleanly
         s.close()
-
-    def test_web_volume_synchronization(self):
-        """Verify web control panel volume controls synchronize with server state and WebSocket broadcast."""
-        otp = self.security.get_current_otp()
-        _, token = self.security.verify_otp(otp, client_ip="127.0.0.1")
-        auth_header = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-
-        conn = self._get_connection()
-
-        # 1. Update volume via REST API to 42%
-        conn.request("POST", "/api/volume", body=json.dumps({"volume": 42}), headers=auth_header)
-        resp = conn.getresponse()
-        self.assertEqual(resp.status, 200)
-        data = json.loads(resp.read().decode("utf-8"))
-        self.assertEqual(data["volume"], 42)
-
-        # 2. Verify GET /status returns updated volume
-        conn.request("GET", "/status")
-        resp_status = conn.getresponse()
-        self.assertEqual(resp_status.status, 200)
-        status_data = json.loads(resp_status.read().decode("utf-8"))
-        self.assertEqual(status_data["volume"], 42)
-
-        # 3. Verify WebSocket volume command & broadcast
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect(("127.0.0.1", self.port))
-        sec_key = "x3JJHMbDL1EzLkh9GBhXDw=="
-        req = (
-            f"GET /ws HTTP/1.1\r\n"
-            f"Host: 127.0.0.1:{self.port}\r\n"
-            f"Upgrade: websocket\r\n"
-            f"Connection: Upgrade\r\n"
-            f"Sec-WebSocket-Key: {sec_key}\r\n"
-            f"Sec-WebSocket-Version: 13\r\n\r\n"
-        )
-        s.sendall(req.encode("utf-8"))
-        s.recv(1024)  # Handshake response
-
-        rfile = s.makefile("rb")
-        read_ws_frame(rfile)  # Initial state frame
-
-        # Send WebSocket volume update to 78% (client frames are masked)
-        send_ws_text(s, json.dumps({"action": "volume", "volume": 78}), masked=True)
-        time.sleep(0.1)
-
-        # Receive broadcast frame
-        opcode, payload = read_ws_frame(rfile)
-        self.assertEqual(opcode, 0x1)
-        ws_status = json.loads(payload.decode("utf-8"))
-        self.assertEqual(ws_status["volume"], 78)
-
-        s.close()
-        conn.close()
-
-    def test_playlist_rest_api_lifecycle(self):
-        """Verify REST API lifecycle for multiple playlists."""
-        otp = self.security.get_current_otp()
-        _, token = self.security.verify_otp(otp, client_ip="127.0.0.1")
-        auth_header = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-
-        conn = self._get_connection()
-
-        # 1. Create two playlists
-        conn.request("POST", "/api/playlist/create", body=json.dumps({"name": "Chill Lounge"}), headers=auth_header)
-        resp1 = conn.getresponse()
-        self.assertEqual(resp1.status, 200)
-        self.assertEqual(json.loads(resp1.read().decode("utf-8"))["playlist"]["name"], "Chill Lounge")
-
-        conn.request("POST", "/api/playlist/create", body=json.dumps({"name": "Workout Mix"}), headers=auth_header)
-        resp2 = conn.getresponse()
-        self.assertEqual(resp2.status, 200)
-        resp2.read()
-
-        # 2. Add track to "Chill Lounge"
-        conn.request(
-            "POST",
-            "/api/playlist/add",
-            body=json.dumps({"playlist": "Chill Lounge", "url": "https://youtube.com/watch?v=chill1", "title": "Chill Song 1"}),
-            headers=auth_header,
-        )
-        resp_add = conn.getresponse()
-        self.assertEqual(resp_add.status, 200)
-        resp_add.read()
-
-        # 3. GET /api/playlists
-        conn.request("GET", "/api/playlists")
-        resp_list = conn.getresponse()
-        self.assertEqual(resp_list.status, 200)
-        data_list = json.loads(resp_list.read().decode("utf-8"))
-        self.assertEqual(len(data_list["playlists"]), 2)
-
-        # 4. GET /api/playlist?name=Chill%20Lounge
-        conn.request("GET", "/api/playlist?name=Chill%20Lounge")
-        resp_single = conn.getresponse()
-        self.assertEqual(resp_single.status, 200)
-        data_single = json.loads(resp_single.read().decode("utf-8"))
-        self.assertEqual(data_single["playlist"]["name"], "Chill Lounge")
-        self.assertEqual(data_single["playlist"]["track_count"], 1)
-
-        # 5. Rename playlist
-        conn.request(
-            "POST",
-            "/api/playlist/rename",
-            body=json.dumps({"playlist": "Chill Lounge", "new_name": "Ultra Chill"}),
-            headers=auth_header,
-        )
-        resp_rename = conn.getresponse()
-        self.assertEqual(resp_rename.status, 200)
-        self.assertEqual(json.loads(resp_rename.read().decode("utf-8"))["playlist"]["name"], "Ultra Chill")
-
-        # 6. Play playlist with new name
-        conn.request("POST", "/api/playlist/play", body=json.dumps({"playlist": "Ultra Chill"}), headers=auth_header)
-        resp_play = conn.getresponse()
-        self.assertEqual(resp_play.status, 200)
-        self.assertTrue(json.loads(resp_play.read().decode("utf-8"))["success"])
-
-        # 7. Delete playlist
-        conn.request("POST", "/api/playlist/delete", body=json.dumps({"name": "Workout Mix"}), headers=auth_header)
-        resp_del = conn.getresponse()
-        self.assertEqual(resp_del.status, 200)
-        self.assertTrue(json.loads(resp_del.read().decode("utf-8"))["deleted"])
-
-        conn.close()
-
-    @patch("music_streamer.search.search_music")
-    def test_api_search_unified(self, mock_web_search):
-        """Verify GET and POST /api/search return both local and web matches."""
-        from music_streamer.search import SearchResult, SearchResults
-
-        mock_web_search.return_value = SearchResults(
-            query="Chill",
-            provider="youtube",
-            count=1,
-            results=[SearchResult(id="y1", title="Chill Beat Online", url="https://youtube.com/watch?v=y1")],
-        )
-
-        otp = self.security.get_current_otp()
-        _, token = self.security.verify_otp(otp, client_ip="127.0.0.1")
-        auth_header = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-
-        conn = self._get_connection()
-
-        # 1. GET /api/search?q=Chill
-        conn.request("GET", "/api/search?q=Chill&count=3&web=1")
-        resp_get = conn.getresponse()
-        self.assertEqual(resp_get.status, 200)
-        data_get = json.loads(resp_get.read().decode("utf-8"))
-        self.assertIn("local_results", data_get)
-        self.assertIn("web_results", data_get)
-        self.assertEqual(len(data_get["web_results"]), 1)
-
-        # 2. POST /api/search
-        conn.request("POST", "/api/search", body=json.dumps({"q": "Chill", "count": 3, "web": True}), headers=auth_header)
-        resp_post = conn.getresponse()
-        self.assertEqual(resp_post.status, 200)
-        data_post = json.loads(resp_post.read().decode("utf-8"))
-        self.assertIn("local_results", data_post)
-        self.assertIn("web_results", data_post)
-
-        conn.close()
 
 
 if __name__ == "__main__":

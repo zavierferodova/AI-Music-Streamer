@@ -44,7 +44,7 @@ All audio is decoded from YouTube (or SoundCloud/Bandcamp) via `yt-dlp` → `ffm
 | `~/music-streamer/resume.py` | Resume: resumes audio stream decoding in sync |
 | `~/music-streamer/volume.py` | Get/set/mute/unmute volume (synced with Master: `+N`/`-N`, `mute`, `unmute`, absolute `0-100`) |
 | `~/music-streamer/loop.py` | Live toggle loop: `[repeat|repeat-one|off|toggle|status]` (`repeat`=all tracks in order/shuffle, `repeat-one`=single track) |
-| `~/music-streamer/otp.py` | One-Time Password (OTP) security manager: `show`, `new`, `on`, `off`, `sessions` |
+| `~/music-streamer/otp.py` | Two-Tier OTP security manager (Admin: full control & playlists; Subscriber: stream & track view only): `show`, `new [admin|subscriber]`, `on`, `off`, `sessions` |
 | `~/music-streamer/status.py` | Show player state, now playing, volume, loop, queue, next track, stream server info (`--json`) |
 | `~/music-streamer/stop.py` | Stop playback (stream switches to silence; use `--all` to stop the daemon server) |
 

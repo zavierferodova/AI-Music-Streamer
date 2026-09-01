@@ -49,6 +49,9 @@ export default function Home() {
   const {
     isSecurityEnabled,
     isAuthenticated,
+    role,
+    isAdmin,
+    isSubscriber,
     isLockModalOpen,
     setIsLockModalOpen,
     authLoading,
@@ -68,35 +71,46 @@ export default function Home() {
   } | null>(null);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
 
-  const handleOpenSearch = useCallback((q: string) => {
-    setSearchQuery(q);
-    setIsSearchModalOpen(true);
-  }, []);
+  const handleOpenSearch = useCallback(
+    (q: string) => {
+      if (!isAdmin) return;
+      setSearchQuery(q);
+      setIsSearchModalOpen(true);
+    },
+    [isAdmin]
+  );
 
-  const handleOpenSaveModal = useCallback((url: string, title: string = "", thumbnail?: string) => {
-    setSaveModalTrack({ url, title: title || url, thumbnail });
-    setIsSaveModalOpen(true);
-  }, []);
+  const handleOpenSaveModal = useCallback(
+    (url: string, title: string = "", thumbnail?: string) => {
+      if (!isAdmin) return;
+      setSaveModalTrack({ url, title: title || url, thumbnail });
+      setIsSaveModalOpen(true);
+    },
+    [isAdmin]
+  );
 
   const handlePlayPlaylist = useCallback(
     (name: string, shuffle: boolean = false) => {
+      if (!isAdmin) return;
       sendCommand({ action: "playlist_play", playlist: name, shuffle });
     },
-    [sendCommand]
+    [isAdmin, sendCommand]
   );
 
   const handleQueuePlaylist = useCallback(
     (name: string, shuffle: boolean = false) => {
+      if (!isAdmin) return;
       sendCommand({ action: "playlist_queue", playlist: name, shuffle });
     },
-    [sendCommand]
+    [isAdmin, sendCommand]
   );
 
   const handlePlaySingleUrl = useCallback(
     (url: string, title: string = "") => {
+      if (!isAdmin) return;
       sendCommand({ action: "interrupt", url, title });
     },
-    [sendCommand]
+    [isAdmin, sendCommand]
   );
 
   const playlists = status?.playlists || [];
@@ -118,26 +132,30 @@ export default function Home() {
         <Header
           isSecurityEnabled={isSecurityEnabled}
           isAuthenticated={isAuthenticated}
+          role={role}
           onOpenLockModal={() => setIsLockModalOpen(true)}
           connectionState={connectionState}
           listenerCount={status?.clients_connected || 0}
         />
 
-        {/* Universal Search Bar */}
-        <UniversalSearchBar onSearch={handleOpenSearch} />
+        {/* Universal Search Bar (Admin only) */}
+        {isAdmin && <UniversalSearchBar onSearch={handleOpenSearch} />}
 
-        {/* Playback Error Alert Banner */}
-        <PlaybackErrorBanner
-          error={status?.last_error}
-          onRetry={retryCurrentTrack}
-          onSkip={skipTrack}
-          onDismiss={dismissPlaybackError}
-        />
+        {/* Playback Error Alert Banner (Admin only) */}
+        {isAdmin && (
+          <PlaybackErrorBanner
+            error={status?.last_error}
+            onRetry={retryCurrentTrack}
+            onSkip={skipTrack}
+            onDismiss={dismissPlaybackError}
+          />
+        )}
 
         {/* Now Playing Hero Card */}
         <NowPlayingHero
           status={status}
           volume={volume}
+          isAdmin={isAdmin}
           onTogglePlayPause={togglePlayPause}
           onPlayPrevious={playPreviousTrack}
           onSkipTrack={skipTrack}
@@ -150,7 +168,7 @@ export default function Home() {
         />
 
         {/* Status Metrics Grid */}
-        <StatusGrid status={status} />
+        <StatusGrid status={status} isAdmin={isAdmin} />
 
         {/* Stream Audio Player Box */}
         <StreamPlayer />
@@ -158,6 +176,7 @@ export default function Home() {
         {/* Playback Tracklist */}
         <PlaybackList
           status={status}
+          isAdmin={isAdmin}
           onTogglePlaybackMode={togglePlaybackMode}
           onResetHistory={resetPlaybackHistory}
           onClearList={clearPlaybackList}
@@ -168,37 +187,44 @@ export default function Home() {
           onSaveToPlaylist={handleOpenSaveModal}
         />
 
-        {/* Playlists Explorer */}
-        <PlaylistExplorer
-          playlists={playlists}
-          onPlayPlaylist={handlePlayPlaylist}
-          onQueuePlaylist={handleQueuePlaylist}
-          onPlaySingleUrl={handlePlaySingleUrl}
-          onRefreshStatus={() => retryServerConnection()}
-        />
+        {/* Playlists Explorer (Admin only - subscriber cannot view playlists) */}
+        {isAdmin && (
+          <PlaylistExplorer
+            playlists={playlists}
+            onPlayPlaylist={handlePlayPlaylist}
+            onQueuePlaylist={handleQueuePlaylist}
+            onPlaySingleUrl={handlePlaySingleUrl}
+            onRefreshStatus={() => retryServerConnection()}
+          />
+        )}
       </div>
 
-      {/* Universal Search Results Modal */}
-      <UniversalSearchModal
-        isOpen={isSearchModalOpen}
-        query={searchQuery}
-        onClose={() => setIsSearchModalOpen(false)}
-        onPlayUrl={handlePlaySingleUrl}
-        onQueueUrl={addTrackToPlayback}
-        onSaveToPlaylist={handleOpenSaveModal}
-      />
+      {/* Universal Search Results Modal (Admin only) */}
+      {isAdmin && (
+        <UniversalSearchModal
+          isOpen={isSearchModalOpen}
+          query={searchQuery}
+          isAdmin={isAdmin}
+          onClose={() => setIsSearchModalOpen(false)}
+          onPlayUrl={handlePlaySingleUrl}
+          onQueueUrl={addTrackToPlayback}
+          onSaveToPlaylist={handleOpenSaveModal}
+        />
+      )}
 
-      {/* Save Track to Playlist Modal */}
-      <SaveToPlaylistModal
-        isOpen={isSaveModalOpen}
-        trackData={saveModalTrack}
-        playlists={playlists}
-        onClose={() => {
-          setIsSaveModalOpen(false);
-          setSaveModalTrack(null);
-        }}
-        onRefreshPlaylists={() => retryServerConnection()}
-      />
+      {/* Save Track to Playlist Modal (Admin only) */}
+      {isAdmin && (
+        <SaveToPlaylistModal
+          isOpen={isSaveModalOpen}
+          trackData={saveModalTrack}
+          playlists={playlists}
+          onClose={() => {
+            setIsSaveModalOpen(false);
+            setSaveModalTrack(null);
+          }}
+          onRefreshPlaylists={() => retryServerConnection()}
+        />
+      )}
 
       {/* Security OTP Lock Screen Modal */}
       <SecurityOtpModal

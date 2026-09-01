@@ -1,11 +1,13 @@
 "use client";
 
-import { Lock, Radio, Users, Activity } from "lucide-react";
+import { Lock, Shield, Headphones, Users, Activity, Crown } from "lucide-react";
 import { ConnectionState } from "@/lib/ws";
+import { UserRole } from "@/types";
 
 interface HeaderProps {
   isSecurityEnabled: boolean;
   isAuthenticated: boolean;
+  role?: UserRole | null;
   onOpenLockModal: () => void;
   connectionState: ConnectionState;
   listenerCount: number;
@@ -14,6 +16,7 @@ interface HeaderProps {
 export function Header({
   isSecurityEnabled,
   isAuthenticated,
+  role,
   onOpenLockModal,
   connectionState,
   listenerCount,
@@ -35,20 +38,41 @@ export function Header({
       </div>
 
       <div className="flex items-center flex-wrap gap-2.5">
-        {/* Security Badge */}
+        {/* Security & Role Badge */}
         <button
           onClick={onOpenLockModal}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/60 text-xs font-medium text-slate-300 transition-all hover:scale-105"
-          title="Security Settings"
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all hover:scale-105 ${
+            !isSecurityEnabled
+              ? "bg-slate-900/80 border-slate-700/60 text-slate-300 hover:bg-slate-800/80"
+              : isAuthenticated && role === "admin"
+              ? "bg-gradient-to-r from-amber-500/15 to-emerald-500/15 border-amber-500/40 text-amber-300 hover:border-amber-400 shadow-sm shadow-amber-500/10"
+              : isAuthenticated && role === "subscriber"
+              ? "bg-sky-500/15 border-sky-500/40 text-sky-300 hover:border-sky-400"
+              : "bg-slate-900/80 border-slate-700/60 text-slate-300 hover:bg-slate-800/80"
+          }`}
+          title="Click to manage or switch OTP security credentials"
         >
-          <Lock className="w-3.5 h-3.5 text-sky-400" />
-          <span>
-            {isSecurityEnabled
-              ? isAuthenticated
-                ? "Protected (Verified)"
-                : "OTP Protected"
-              : "Public Access"}
-          </span>
+          {!isSecurityEnabled ? (
+            <>
+              <Shield className="w-3.5 h-3.5 text-slate-400" />
+              <span>Public Access</span>
+            </>
+          ) : isAuthenticated && role === "admin" ? (
+            <>
+              <Crown className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+              <span className="font-semibold text-amber-300">Admin (Full Control)</span>
+            </>
+          ) : isAuthenticated && role === "subscriber" ? (
+            <>
+              <Headphones className="w-3.5 h-3.5 text-sky-400" />
+              <span className="font-semibold text-sky-300">Subscriber (Stream &amp; Tracks)</span>
+            </>
+          ) : (
+            <>
+              <Lock className="w-3.5 h-3.5 text-sky-400" />
+              <span>OTP Protected</span>
+            </>
+          )}
         </button>
 
         {/* Live Indicator */}

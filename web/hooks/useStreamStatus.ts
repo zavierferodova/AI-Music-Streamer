@@ -159,10 +159,8 @@ export function useStreamStatus() {
   }, [sendCommand, showToast]);
 
   const clearPlaybackList = useCallback(() => {
-    if (window.confirm("Clear the entire upcoming playback list?")) {
-      sendCommand({ action: "playback_clear" });
-      showToast("Cleared playback list", "info", "delete_sweep");
-    }
+    sendCommand({ action: "playback_clear" });
+    showToast("Cleared playback list", "info", "delete_sweep");
   }, [sendCommand, showToast]);
 
   const addTrackToPlayback = useCallback(

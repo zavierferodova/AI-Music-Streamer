@@ -16,6 +16,8 @@ import {
   Music2,
   Loader2,
   ExternalLink,
+  Headphones,
+  Radio,
 } from "lucide-react";
 import { ServerStatus } from "@/types";
 import { formatTrackDisplay, copyToClipboard } from "@/lib/utils";
@@ -25,6 +27,7 @@ import { useToast } from "@/hooks/useToast";
 interface NowPlayingHeroProps {
   status: ServerStatus | null;
   volume: number;
+  isAdmin?: boolean;
   onTogglePlayPause: () => void;
   onPlayPrevious: () => void;
   onSkipTrack: () => void;
@@ -39,6 +42,7 @@ interface NowPlayingHeroProps {
 export function NowPlayingHero({
   status,
   volume,
+  isAdmin = true,
   onTogglePlayPause,
   onPlayPrevious,
   onSkipTrack,
@@ -183,102 +187,124 @@ export function NowPlayingHero({
         </div>
       </div>
 
-      {/* Control Buttons Bar */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-2.5">
-        {/* Previous Button */}
-        <button
-          onClick={onPlayPrevious}
-          className="flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2.5 sm:py-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 text-xs font-semibold transition-all hover:scale-105 active:scale-95 min-h-[44px]"
-          title="Play Previous Track"
-        >
-          <SkipBack className="w-4 h-4 text-slate-300 shrink-0" />
-          <span className="truncate">Previous</span>
-        </button>
+      {/* Admin Playback Controls & Master Volume */}
+      {isAdmin ? (
+        <>
+          {/* Control Buttons Bar */}
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-2.5">
+            {/* Previous Button */}
+            <button
+              onClick={onPlayPrevious}
+              className="flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2.5 sm:py-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 text-xs font-semibold transition-all hover:scale-105 active:scale-95 min-h-[44px]"
+              title="Play Previous Track"
+            >
+              <SkipBack className="w-4 h-4 text-slate-300 shrink-0" />
+              <span className="truncate">Previous</span>
+            </button>
 
-        {/* Play/Pause Button */}
-        <button
-          onClick={onTogglePlayPause}
-          className="flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 sm:py-3 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-sky-500/25 transition-all hover:scale-105 active:scale-95 min-h-[44px]"
-        >
-          {isPlaying ? <Pause className="w-4 h-4 fill-white shrink-0" /> : <Play className="w-4 h-4 fill-white shrink-0" />}
-          <span className="truncate">{isPlaying ? "Pause" : isPaused ? "Resume" : "Play"}</span>
-        </button>
+            {/* Play/Pause Button */}
+            <button
+              onClick={onTogglePlayPause}
+              className="flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 sm:py-3 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-sky-500/25 transition-all hover:scale-105 active:scale-95 min-h-[44px]"
+            >
+              {isPlaying ? <Pause className="w-4 h-4 fill-white shrink-0" /> : <Play className="w-4 h-4 fill-white shrink-0" />}
+              <span className="truncate">{isPlaying ? "Pause" : isPaused ? "Resume" : "Play"}</span>
+            </button>
 
-        {/* Skip Next */}
-        <button
-          onClick={onSkipTrack}
-          className="flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2.5 sm:py-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 text-xs font-semibold transition-all hover:scale-105 active:scale-95 min-h-[44px]"
-          title="Skip to Next Track"
-        >
-          <SkipForward className="w-4 h-4 text-slate-300 shrink-0" />
-          <span className="truncate">Next</span>
-        </button>
+            {/* Skip Next */}
+            <button
+              onClick={onSkipTrack}
+              className="flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2.5 sm:py-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 text-xs font-semibold transition-all hover:scale-105 active:scale-95 min-h-[44px]"
+              title="Skip to Next Track"
+            >
+              <SkipForward className="w-4 h-4 text-slate-300 shrink-0" />
+              <span className="truncate">Next</span>
+            </button>
 
-        {/* Loop Toggle */}
-        <button
-          onClick={onToggleLoop}
-          className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2.5 sm:py-3 rounded-2xl border text-xs font-semibold transition-all hover:scale-105 active:scale-95 min-h-[44px] ${
-            loopMode === "repeat-one" || loopMode === "one"
-              ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40"
-              : loopMode === "repeat" || loopMode === "yes"
-              ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
-              : "bg-slate-800/80 text-slate-400 border-slate-700"
-          }`}
-        >
-          {loopMode === "repeat-one" || loopMode === "one" ? (
-            <Repeat1 className="w-4 h-4 text-indigo-400 shrink-0" />
-          ) : (
-            <Repeat className="w-4 h-4 shrink-0" />
-          )}
-          <span className="truncate">
-            <span className="hidden sm:inline">Loop: </span>
-            <strong>
-              {loopMode === "repeat-one" || loopMode === "one"
-                ? "ONE"
-                : loopMode === "repeat" || loopMode === "yes"
-                ? "REPEAT"
-                : "OFF"}
-            </strong>
-          </span>
-        </button>
+            {/* Loop Toggle */}
+            <button
+              onClick={onToggleLoop}
+              className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2.5 sm:py-3 rounded-2xl border text-xs font-semibold transition-all hover:scale-105 active:scale-95 min-h-[44px] ${
+                loopMode === "repeat-one" || loopMode === "one"
+                  ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40"
+                  : loopMode === "repeat" || loopMode === "yes"
+                  ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
+                  : "bg-slate-800/80 text-slate-400 border-slate-700"
+              }`}
+            >
+              {loopMode === "repeat-one" || loopMode === "one" ? (
+                <Repeat1 className="w-4 h-4 text-indigo-400 shrink-0" />
+              ) : (
+                <Repeat className="w-4 h-4 shrink-0" />
+              )}
+              <span className="truncate">
+                <span className="hidden sm:inline">Loop: </span>
+                <strong>
+                  {loopMode === "repeat-one" || loopMode === "one"
+                    ? "ONE"
+                    : loopMode === "repeat" || loopMode === "yes"
+                    ? "REPEAT"
+                    : "OFF"}
+                </strong>
+              </span>
+            </button>
 
-        {/* Broadcast Mode Toggle */}
-        <button
-          onClick={onToggleMode}
-          className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2.5 sm:py-3 rounded-2xl border text-xs font-semibold transition-all hover:scale-105 active:scale-95 min-h-[44px] ${
-            broadcastMode === "speaker"
-              ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
-              : "bg-slate-800/80 text-slate-300 border-slate-700"
-          }`}
-        >
-          {broadcastMode === "speaker" ? (
-            <Volume2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          ) : (
-            <VolumeX className="w-4 h-4 text-slate-400 shrink-0" />
-          )}
-          <span className="truncate">
-            <span className="hidden sm:inline">Mode: </span>
-            <strong>{broadcastMode.toUpperCase()}</strong>
-          </span>
-        </button>
+            {/* Broadcast Mode Toggle */}
+            <button
+              onClick={onToggleMode}
+              className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2.5 sm:py-3 rounded-2xl border text-xs font-semibold transition-all hover:scale-105 active:scale-95 min-h-[44px] ${
+                broadcastMode === "speaker"
+                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                  : "bg-slate-800/80 text-slate-300 border-slate-700"
+              }`}
+            >
+              {broadcastMode === "speaker" ? (
+                <Volume2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              ) : (
+                <VolumeX className="w-4 h-4 text-slate-400 shrink-0" />
+              )}
+              <span className="truncate">
+                <span className="hidden sm:inline">Mode: </span>
+                <strong>{broadcastMode.toUpperCase()}</strong>
+              </span>
+            </button>
 
-        {/* Stop Button */}
-        <button
-          onClick={onStopMusic}
-          className="flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2.5 sm:py-3 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-semibold transition-all hover:scale-105 active:scale-95 min-h-[44px]"
-        >
-          <Square className="w-3.5 h-3.5 fill-rose-400 shrink-0" />
-          <span className="truncate">Stop</span>
-        </button>
-      </div>
+            {/* Stop Button */}
+            <button
+              onClick={onStopMusic}
+              className="flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2.5 sm:py-3 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-semibold transition-all hover:scale-105 active:scale-95 min-h-[44px]"
+            >
+              <Square className="w-3.5 h-3.5 fill-rose-400 shrink-0" />
+              <span className="truncate">Stop</span>
+            </button>
+          </div>
 
-      {/* Volume Bar */}
-      <VolumeControls
-        volume={volume}
-        onVolumeChange={onVolumeChange}
-        onVolumeStep={onVolumeStep}
-        onToggleMute={onToggleMute}
-      />
+          {/* Volume Bar */}
+          <VolumeControls
+            volume={volume}
+            onVolumeChange={onVolumeChange}
+            onVolumeStep={onVolumeStep}
+            onToggleMute={onToggleMute}
+          />
+        </>
+      ) : (
+        /* Subscriber Stream Info Box */
+        <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-800/60 border border-slate-700/50 mt-2 text-xs">
+          <div className="flex items-center gap-2.5 text-slate-300">
+            <div className="w-8 h-8 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
+              <Headphones className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="font-semibold text-white">Live Stream Listening</div>
+              <div className="text-[11px] text-slate-400">Continuous 24/7 synchronized broadcast</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold">
+            <Radio className="w-3.5 h-3.5 animate-pulse" />
+            <span>Audio Live</span>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

@@ -99,7 +99,7 @@ export function SecurityOtpModal({
     if (code.length < 6) return;
     const ok = await onSubmitOtp(code);
     if (ok) {
-      showToast("Unlocked successfully! Welcome.", "success", "lock_open");
+      showToast("Passcode verified successfully! Welcome.", "success", "lock_open");
       onClose();
     }
   };
@@ -126,16 +126,18 @@ export function SecurityOtpModal({
         </div>
 
         {/* Lock Icon */}
-        <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-sky-500/25 mb-4 border border-sky-400/30">
+        <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-sky-500/25 mb-3 border border-sky-400/30">
           <Lock className="w-7 h-7" />
         </div>
 
         <h2 className="text-lg font-bold text-white tracking-tight text-center">
-          Passcode Required
+          Authentication Required
         </h2>
-        <p className="text-xs text-slate-400 text-center mt-1 mb-6 leading-relaxed">
-          Enter the 6-digit One-Time Password (OTP) displayed in your server console or run{" "}
-          <code className="text-sky-300 font-mono px-1 py-0.5 rounded bg-slate-800">./otp.py</code>
+
+        <p className="text-xs text-slate-400 text-center mt-1 mb-5 leading-relaxed">
+          Enter your 6-digit One-Time Password (OTP) or run{" "}
+          <code className="text-sky-300 font-mono px-1 py-0.5 rounded bg-slate-800">./otp.py</code>{" "}
+          on your server.
         </p>
 
         {/* OTP Digits */}
@@ -177,7 +179,7 @@ export function SecurityOtpModal({
           ) : (
             <KeyRound className="w-4 h-4" />
           )}
-          <span>{loading ? "Verifying..." : "Unlock Control Panel"}</span>
+          <span>{loading ? "Verifying..." : "Authenticate Passcode"}</span>
         </button>
       </div>
     </div>

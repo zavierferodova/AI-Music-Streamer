@@ -20,6 +20,7 @@ import { formatTrackDisplay } from "@/lib/utils";
 interface UniversalSearchModalProps {
   isOpen: boolean;
   query: string;
+  isAdmin?: boolean;
   onClose: () => void;
   onPlayUrl: (url: string, title?: string) => void;
   onQueueUrl: (url: string, title?: string) => void;
@@ -29,6 +30,7 @@ interface UniversalSearchModalProps {
 export function UniversalSearchModal({
   isOpen,
   query,
+  isAdmin = true,
   onClose,
   onPlayUrl,
   onQueueUrl,
@@ -141,26 +143,22 @@ export function UniversalSearchModal({
 
           {!loading && !error && (
             <>
-              {/* Local Matches Section */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                  <div className="flex items-center gap-2">
-                    <Library className="w-4 h-4 text-indigo-400" />
-                    <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                      Found in Playlists &amp; Library
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[11px] font-semibold">
-                      {localMatches.length} found
-                    </span>
+              {/* Local Matches Section (Admin only or non-playlist items) */}
+              {localMatches.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                    <div className="flex items-center gap-2">
+                      <Library className="w-4 h-4 text-indigo-400" />
+                      <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                        Found in Library
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[11px] font-semibold">
+                        {localMatches.length} found
+                      </span>
+                    </div>
+                    {isAdmin && <span className="text-[11px] text-slate-400">Instant Play</span>}
                   </div>
-                  <span className="text-[11px] text-slate-400">Instant Local Play</span>
-                </div>
 
-                {localMatches.length === 0 ? (
-                  <div className="py-4 text-center text-xs text-slate-400">
-                    No matching tracks in your playlists or queue.
-                  </div>
-                ) : (
                   <div className="space-y-2">
                     {localMatches.map((item, idx) => {
                       const display = formatTrackDisplay(item.title, item.url);
@@ -202,40 +200,42 @@ export function UniversalSearchModal({
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
-                            <button
-                              onClick={() => {
-                                onPlayUrl(item.url, item.title);
-                                onClose();
-                              }}
-                              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 text-xs font-medium border border-sky-500/40 transition-all"
-                            >
-                              <Play className="w-3.5 h-3.5" />
-                              <span>Play Local</span>
-                            </button>
-                            <button
-                              onClick={() => onQueueUrl(item.url, item.title)}
-                              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-700/60 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-all"
-                              title="Add to Queue"
-                            >
-                              <ListPlus className="w-3.5 h-3.5" />
-                              <span>Queue</span>
-                            </button>
-                            <button
-                              onClick={() => onSaveToPlaylist(item.url, item.title, item.thumbnail || undefined)}
-                              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-700/60 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-all"
-                              title="Save to Playlist"
-                            >
-                              <BookmarkPlus className="w-3.5 h-3.5" />
-                              <span>Save</span>
-                            </button>
-                          </div>
+                          {isAdmin && (
+                            <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+                              <button
+                                onClick={() => {
+                                  onPlayUrl(item.url, item.title);
+                                  onClose();
+                                }}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 text-xs font-medium border border-sky-500/40 transition-all"
+                              >
+                                <Play className="w-3.5 h-3.5" />
+                                <span>Play Local</span>
+                              </button>
+                              <button
+                                onClick={() => onQueueUrl(item.url, item.title)}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-700/60 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-all"
+                                title="Add to Queue"
+                              >
+                                <ListPlus className="w-3.5 h-3.5" />
+                                <span>Queue</span>
+                              </button>
+                              <button
+                                onClick={() => onSaveToPlaylist(item.url, item.title, item.thumbnail || undefined)}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-700/60 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-all"
+                                title="Save to Playlist"
+                              >
+                                <BookmarkPlus className="w-3.5 h-3.5" />
+                                <span>Save</span>
+                              </button>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Web YouTube Matches Section */}
               <div className="space-y-3 pt-2">
@@ -249,7 +249,7 @@ export function UniversalSearchModal({
                       {webMatches.length} found
                     </span>
                   </div>
-                  <span className="text-[11px] text-slate-400">Online Stream</span>
+                  {isAdmin && <span className="text-[11px] text-slate-400">Online Stream</span>}
                 </div>
 
                 {webMatches.length === 0 ? (
@@ -288,34 +288,36 @@ export function UniversalSearchModal({
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
-                            <button
-                              onClick={() => {
-                                onPlayUrl(item.url, item.title);
-                                onClose();
-                              }}
-                              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-semibold shadow-sm transition-all"
-                            >
-                              <Play className="w-3.5 h-3.5 fill-white" />
-                              <span>Play Web</span>
-                            </button>
-                            <button
-                              onClick={() => onQueueUrl(item.url, item.title)}
-                              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-700/60 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-all"
-                              title="Add to Queue"
-                            >
-                              <ListPlus className="w-3.5 h-3.5" />
-                              <span>Queue</span>
-                            </button>
-                            <button
-                              onClick={() => onSaveToPlaylist(item.url, item.title, thumb)}
-                              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-700/60 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-all"
-                              title="Save to Playlist"
-                            >
-                              <BookmarkPlus className="w-3.5 h-3.5" />
-                              <span>Save</span>
-                            </button>
-                          </div>
+                          {isAdmin && (
+                            <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+                              <button
+                                onClick={() => {
+                                  onPlayUrl(item.url, item.title);
+                                  onClose();
+                                }}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-semibold shadow-sm transition-all"
+                              >
+                                <Play className="w-3.5 h-3.5 fill-white" />
+                                <span>Play Web</span>
+                              </button>
+                              <button
+                                onClick={() => onQueueUrl(item.url, item.title)}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-700/60 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-all"
+                                title="Add to Queue"
+                              >
+                                <ListPlus className="w-3.5 h-3.5" />
+                                <span>Queue</span>
+                              </button>
+                              <button
+                                onClick={() => onSaveToPlaylist(item.url, item.title, thumb)}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-700/60 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-all"
+                                title="Save to Playlist"
+                              >
+                                <BookmarkPlus className="w-3.5 h-3.5" />
+                                <span>Save</span>
+                              </button>
+                            </div>
+                          )}
                         </div>
                       );
                     })}

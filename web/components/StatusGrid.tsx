@@ -6,9 +6,10 @@ import { formatTrackDisplay } from "@/lib/utils";
 
 interface StatusGridProps {
   status: ServerStatus | null;
+  isAdmin?: boolean;
 }
 
-export function StatusGrid({ status }: StatusGridProps) {
+export function StatusGrid({ status, isAdmin = true }: StatusGridProps) {
   const isPlaying = status?.state === "playing";
   const isPaused = status?.state === "paused";
   const isBuffering = isPlaying && !!status?.is_buffering;
@@ -25,7 +26,12 @@ export function StatusGrid({ status }: StatusGridProps) {
   const nextDisplay = formatTrackDisplay(nextTrack?.title, nextTrack?.url);
 
   return (
-    <section className="grid grid-cols-2 md:grid-cols-3 gap-3.5 my-6" aria-label="Music Status Metrics">
+    <section
+      className={`grid gap-3.5 my-6 ${
+        isAdmin ? "grid-cols-2 md:grid-cols-3" : "grid-cols-1 sm:grid-cols-3"
+      }`}
+      aria-label="Music Status Metrics"
+    >
       {/* 1. Playback State */}
       <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-md flex flex-col justify-between">
         <div className="flex items-center gap-2 text-slate-400 text-xs font-medium">
@@ -50,7 +56,7 @@ export function StatusGrid({ status }: StatusGridProps) {
             {isBuffering
               ? "Buffering audio chunks..."
               : isPlaying
-              ? "Audio decoding active"
+              ? "Audio stream decoding active"
               : isPaused
               ? "Playback paused (silence stream)"
               : "Broadcasting comfort silence"}
@@ -58,65 +64,71 @@ export function StatusGrid({ status }: StatusGridProps) {
         </div>
       </div>
 
-      {/* 2. Server Volume */}
-      <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-md flex flex-col justify-between">
-        <div className="flex items-center gap-2 text-slate-400 text-xs font-medium">
-          <Volume2 className="w-4 h-4 text-indigo-400" />
-          <span>Server Volume</span>
-        </div>
-        <div className="my-2">
-          <div className="text-lg font-bold text-white tracking-tight">{volumeVal}%</div>
-          <div className="text-[11px] text-slate-500">ALSA Master Synced</div>
-        </div>
-      </div>
-
-      {/* 3. Broadcast Mode */}
-      <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-md flex flex-col justify-between">
-        <div className="flex items-center gap-2 text-slate-400 text-xs font-medium">
-          <Radio className="w-4 h-4 text-emerald-400" />
-          <span>Broadcast Mode</span>
-        </div>
-        <div className="my-2">
-          <div
-            className={`text-lg font-bold tracking-tight ${
-              broadcastMode === "SPEAKER" ? "text-emerald-400" : "text-slate-300"
-            }`}
-          >
-            {broadcastMode}
+      {/* 2. Server Volume (Admin only) */}
+      {isAdmin && (
+        <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-md flex flex-col justify-between">
+          <div className="flex items-center gap-2 text-slate-400 text-xs font-medium">
+            <Volume2 className="w-4 h-4 text-indigo-400" />
+            <span>Server Speaker Volume</span>
           </div>
-          <div className="text-[11px] text-slate-500 truncate">
-            {broadcastMode === "SPEAKER" ? "Server speaker unmuted + stream" : "HTTP stream broadcast only"}
+          <div className="my-2">
+            <div className="text-lg font-bold text-white tracking-tight">{volumeVal}%</div>
+            <div className="text-[11px] text-slate-500">ALSA Master Synced</div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* 4. Loop Setting */}
-      <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-md flex flex-col justify-between">
-        <div className="flex items-center gap-2 text-slate-400 text-xs font-medium">
-          <Repeat className="w-4 h-4 text-purple-400" />
-          <span>Loop Setting</span>
+      {/* 3. Broadcast Mode (Admin only) */}
+      {isAdmin && (
+        <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-md flex flex-col justify-between">
+          <div className="flex items-center gap-2 text-slate-400 text-xs font-medium">
+            <Radio className="w-4 h-4 text-emerald-400" />
+            <span>Broadcast Mode</span>
+          </div>
+          <div className="my-2">
+            <div
+              className={`text-lg font-bold tracking-tight ${
+                broadcastMode === "SPEAKER" ? "text-emerald-400" : "text-slate-300"
+              }`}
+            >
+              {broadcastMode}
+            </div>
+            <div className="text-[11px] text-slate-500 truncate">
+              {broadcastMode === "SPEAKER" ? "Server speaker unmuted + stream" : "HTTP stream broadcast only"}
+            </div>
+          </div>
         </div>
-        <div className="my-2">
-          <div
-            className={`text-lg font-bold tracking-tight ${
-              loopMode === "REPEAT-ONE"
-                ? "text-indigo-400"
+      )}
+
+      {/* 4. Loop Setting (Admin only) */}
+      {isAdmin && (
+        <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-md flex flex-col justify-between">
+          <div className="flex items-center gap-2 text-slate-400 text-xs font-medium">
+            <Repeat className="w-4 h-4 text-purple-400" />
+            <span>Loop Setting</span>
+          </div>
+          <div className="my-2">
+            <div
+              className={`text-lg font-bold tracking-tight ${
+                loopMode === "REPEAT-ONE"
+                  ? "text-indigo-400"
+                  : loopMode === "REPEAT" || loopMode === "YES"
+                  ? "text-sky-400"
+                  : "text-slate-400"
+              }`}
+            >
+              {loopMode}
+            </div>
+            <div className="text-[11px] text-slate-500 truncate">
+              {loopMode === "REPEAT-ONE"
+                ? "Repeats single current track"
                 : loopMode === "REPEAT" || loopMode === "YES"
-                ? "text-sky-400"
-                : "text-slate-400"
-            }`}
-          >
-            {loopMode}
-          </div>
-          <div className="text-[11px] text-slate-500 truncate">
-            {loopMode === "REPEAT-ONE"
-              ? "Repeats single current track"
-              : loopMode === "REPEAT" || loopMode === "YES"
-              ? "Full cycle repetition"
-              : "Plays once then stops"}
+                ? "Full cycle repetition"
+                : "Plays once then stops"}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* 5. Playback Tracklist Summary */}
       <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-md flex flex-col justify-between">
@@ -132,8 +144,12 @@ export function StatusGrid({ status }: StatusGridProps) {
         </div>
       </div>
 
-      {/* 6. Next Up (Wide on desktop or span) */}
-      <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-md flex flex-col justify-between col-span-2 md:col-span-1">
+      {/* 6. Next Up */}
+      <div
+        className={`p-4 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-md flex flex-col justify-between ${
+          isAdmin ? "col-span-2 md:col-span-1" : ""
+        }`}
+      >
         <div className="flex items-center gap-2 text-slate-400 text-xs font-medium">
           <FastForward className="w-4 h-4 text-amber-400" />
           <span>Next Up</span>

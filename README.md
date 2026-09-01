@@ -73,7 +73,7 @@ pip install -r requirements.txt
 | `./resume.py` | Resume playback (unmutes ALSA and resumes audio stream) |
 | `./volume.py` | Show / set / mute / unmute volume (`0-100`, `+N`, `-N`, `mute`, `unmute`) |
 | `./loop.py` | Live toggle loop: `[yes\|no\|toggle\|status]` |
-| `./otp.py` | One-Time Password (OTP) security manager: `show`, `new`, `on`, `off`, `sessions` |
+| `./otp.py` | Two-Tier OTP security manager (Admin: full control & playlists; Subscriber: stream & track view only): `show`, `new [admin|subscriber]`, `on`, `off`, `sessions` |
 | `./status.py` | Show full status: player state, stream server, volume, queue, next track (`--json`) |
 | `./stop.py` | Stop playback (switches stream to silence mode; use `--all` to shut down server) |
 

@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { checkAuthStatus, verifyOtp } from "@/lib/api";
+import { checkAuthStatus, getAuthRole, verifyOtp } from "@/lib/api";
+import { UserRole } from "@/types";
 
 export function useAuth() {
   const [isSecurityEnabled, setIsSecurityEnabled] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [role, setRole] = useState<UserRole | null>(() => getAuthRole());
   const [isLockModalOpen, setIsLockModalOpen] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -16,6 +18,12 @@ export function useAuth() {
       if (data) {
         setIsSecurityEnabled(data.security_enabled);
         setIsAuthenticated(data.authenticated);
+        if (data.role) {
+          setRole(data.role);
+        } else if (!data.authenticated) {
+          setRole(null);
+        }
+
         if (data.security_enabled && !data.authenticated) {
           // Check if OTP in URL
           const params = new URLSearchParams(window.location.search);
@@ -41,6 +49,9 @@ export function useAuth() {
       const res = await verifyOtp(otp);
       if (res.authenticated) {
         setIsAuthenticated(true);
+        if (res.role) {
+          setRole(res.role);
+        }
         setIsLockModalOpen(false);
         setAuthLoading(false);
         return true;
@@ -60,9 +71,16 @@ export function useAuth() {
     refreshAuth();
   }, [refreshAuth]);
 
+  // Derived role flags
+  const isAdmin = !isSecurityEnabled || (isAuthenticated && role === "admin");
+  const isSubscriber = isSecurityEnabled && isAuthenticated && role === "subscriber";
+
   return {
     isSecurityEnabled,
     isAuthenticated,
+    role,
+    isAdmin,
+    isSubscriber,
     isLockModalOpen,
     setIsLockModalOpen,
     authLoading,

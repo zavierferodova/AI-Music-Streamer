@@ -2,6 +2,7 @@ export type PlaybackState = "playing" | "paused" | "stopped";
 export type BroadcastMode = "silent" | "speaker";
 export type LoopMode = "repeat" | "repeat-one" | "off" | "yes" | "no";
 export type PlaylistOrderMode = "ordered" | "shuffled";
+export type UserRole = "admin" | "subscriber";
 
 export interface NowPlaying {
   url: string | null;
@@ -85,6 +86,7 @@ export interface ServerStatus {
   state: PlaybackState;
   mode: BroadcastMode;
   volume: number;
+  role?: UserRole;
   security: SecurityStatus;
   now_playing: NowPlaying;
   loop: LoopMode;
@@ -107,12 +109,14 @@ export interface AuthStatusResponse {
   status: string;
   security_enabled: boolean;
   authenticated: boolean;
+  role?: UserRole | null;
 }
 
 export interface AuthVerifyResponse {
   status: string;
   authenticated: boolean;
   token?: string;
+  role?: UserRole | null;
   message?: string;
 }
 

@@ -1,5 +1,6 @@
 """
 HTTP Server, WebSocket Realtime Hub, REST API Handlers, and Unix Domain Socket Listener.
+Supports dual-role authentication: Admin (full control & playlists) and Subscriber (streaming & track viewing only).
 """
 
 import base64
@@ -105,8 +106,12 @@ def build_server_status(
     engine: Optional[AudioEngine] = None,
     broadcaster: Optional[Broadcaster] = None,
     host_header: str = "localhost:8000",
+    role: str = "admin",
 ) -> dict:
-    """Builds a complete, unified dictionary of the current playback, stream, and track history state."""
+    """
+    Builds a complete, unified dictionary of the current playback, stream, and track history state.
+    If role == 'subscriber', playlists are omitted (empty list) for privacy.
+    """
     db_inst = database or db
     mgr = PlaybackManager(db_inst)
     playback_state = mgr.get_state()
@@ -128,11 +133,15 @@ def build_server_status(
 
     vol = engine.volume if engine else db_inst.get_int_setting("volume", 80)
 
+    # Subscribers CANNOT view playlists
+    playlists = db_inst.get_playlists() if role == "admin" else []
+
     return {
         "server": "music-streamer",
         "state": state,
         "mode": mode,
         "volume": vol,
+        "role": role,
         "security": {
             "enabled": db_inst.get_bool_setting("otp_enabled", default=True),
         },
@@ -151,7 +160,7 @@ def build_server_status(
             "mode": playback_state["mode"],
             "tracks": playback_state["queued_tracks"],
         },
-        "playlists": db_inst.get_playlists(),
+        "playlists": playlists,
         "next": playback_state["next"],
         "clients_connected": client_cnt,
         "stream_url": f"http://{host_header}/stream.mp3",
@@ -159,23 +168,23 @@ def build_server_status(
 
 
 class WebSocketHub:
-    """Manages active WebSocket connections and broadcasts real-time updates to all connected clients."""
+    """Manages active WebSocket connections and broadcasts role-tailored real-time updates."""
 
     def __init__(self, server):
         self.server = server
-        self.clients = set()
+        self.clients = {}  # wfile -> {"host_header": host_header, "role": role}
         self.lock = threading.Lock()
         self.running = True
         self._ticker_thread = threading.Thread(target=self._ticker_loop, daemon=True)
         self._ticker_thread.start()
 
-    def register(self, wfile, host_header="localhost:8000"):
+    def register(self, wfile, host_header="localhost:8000", role="admin"):
         with self.lock:
-            self.clients.add((wfile, host_header))
-        print(f"[WebSocketHub] Client connected (Active WS listeners: {len(self.clients)})")
+            self.clients[wfile] = {"host_header": host_header, "role": role}
+        print(f"[WebSocketHub] Client connected (Role: {role}, Active WS listeners: {len(self.clients)})")
         try:
             status_json = json.dumps(
-                build_server_status(self.server.db, self.server.engine, self.server.broadcaster, host_header),
+                build_server_status(self.server.db, self.server.engine, self.server.broadcaster, host_header, role=role),
                 ensure_ascii=False,
             )
             send_ws_text(wfile, status_json)
@@ -184,24 +193,40 @@ class WebSocketHub:
 
     def unregister(self, wfile):
         with self.lock:
-            self.clients = {(w, h) for (w, h) in self.clients if w != wfile}
+            self.clients.pop(wfile, None)
         print(f"[WebSocketHub] Client disconnected (Remaining WS listeners: {len(self.clients)})")
 
+    def update_role(self, wfile, role: str):
+        with self.lock:
+            if wfile in self.clients:
+                self.clients[wfile]["role"] = role
+
+    def get_role(self, wfile) -> str:
+        with self.lock:
+            info = self.clients.get(wfile)
+            return info["role"] if info else "subscriber"
+
     def broadcast(self):
-        """Pushes the latest status to every connected WebSocket client."""
+        """Pushes the latest status to every connected WebSocket client tailored by role."""
         dead = []
         with self.lock:
-            for wfile, host_header in list(self.clients):
+            for wfile, info in list(self.clients.items()):
                 try:
                     status_json = json.dumps(
-                        build_server_status(self.server.db, self.server.engine, self.server.broadcaster, host_header),
+                        build_server_status(
+                            self.server.db,
+                            self.server.engine,
+                            self.server.broadcaster,
+                            info["host_header"],
+                            role=info.get("role", "admin"),
+                        ),
                         ensure_ascii=False,
                     )
                     send_ws_text(wfile, status_json)
                 except Exception:
-                    dead.append((wfile, host_header))
+                    dead.append(wfile)
             for d in dead:
-                self.clients.discard(d)
+                self.clients.pop(d, None)
 
     def _ticker_loop(self):
         """Periodic 0.5s broadcast to keep elapsed playback time smoothly updating."""
@@ -239,7 +264,8 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.flush()
 
             host_header = self.headers.get("Host", "localhost:8000")
-            self.server.ws_hub.register(self.wfile, host_header)
+            caller_role = self.server.security.get_request_role(self) or ("admin" if not self.server.security.is_enabled() else "subscriber")
+            self.server.ws_hub.register(self.wfile, host_header, role=caller_role)
 
             try:
                 while True:
@@ -271,7 +297,11 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
 
             if not head_only:
                 host_header = self.headers.get("Host", "localhost:8000")
-                data = build_server_status(self.server.db, self.server.engine, self.server.broadcaster, host_header)
+                sec: OTPManager = self.server.security
+                caller_role = sec.get_request_role(self) or ("admin" if not sec.is_enabled() else "subscriber")
+                data = build_server_status(
+                    self.server.db, self.server.engine, self.server.broadcaster, host_header, role=caller_role
+                )
                 self.wfile.write(json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8"))
             return
 
@@ -284,17 +314,28 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
 
             if not head_only:
                 sec: OTPManager = self.server.security
-                authed = sec.is_request_authenticated(self)
+                caller_role = sec.get_request_role(self)
+                authed = caller_role is not None if sec.is_enabled() else True
                 self.wfile.write(
                     json.dumps({
                         "status": "ok",
                         "security_enabled": sec.is_enabled(),
                         "authenticated": authed,
+                        "role": caller_role if authed else None,
                     }).encode("utf-8")
                 )
             return
 
         elif path == "/api/playlists":
+            sec: OTPManager = self.server.security
+            if sec.is_enabled() and not sec.is_request_authenticated(self, required_role="admin"):
+                self.send_response(403)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(b'{"status": "error", "error": "Forbidden: Playlists are only available to administrators."}\n')
+                return
+
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
@@ -306,6 +347,15 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             return
 
         elif path == "/api/playlist":
+            sec: OTPManager = self.server.security
+            if sec.is_enabled() and not sec.is_request_authenticated(self, required_role="admin"):
+                self.send_response(403)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(b'{"status": "error", "error": "Forbidden: Playlists are only available to administrators."}\n')
+                return
+
             qs = parse_qs(parsed.query)
             target = qs.get("name", [""])[0] or qs.get("id", [""])[0] or qs.get("playlist", [""])[0]
             pl = self.server.playlist_mgr.get_playlist(target) if target else None
@@ -327,12 +377,18 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             return
 
         elif path == "/api/search":
+            sec: OTPManager = self.server.security
+            caller_role = sec.get_request_role(self) or ("admin" if not sec.is_enabled() else "subscriber")
             qs = parse_qs(parsed.query)
             q = qs.get("q", [""])[0] or qs.get("query", [""])[0]
             count = int(qs.get("count", ["5"])[0])
             include_web = qs.get("web", ["1"])[0] not in ["0", "false", "no"]
             from music_streamer.search import search_unified
             res = search_unified(q, count=count, include_web=include_web, database=self.server.db)
+            if caller_role == "subscriber" and sec.is_enabled():
+                if "local_matches" in res:
+                    res["local_matches"] = [m for m in res["local_matches"] if m.get("source_type") != "playlist"]
+                    res["local_count"] = len(res["local_matches"])
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
@@ -348,7 +404,7 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             cookie_header = None
             if query_otp:
                 sec: OTPManager = self.server.security
-                ok, token = sec.verify_otp(query_otp, self.client_address[0])
+                ok, token, role = sec.verify_otp(query_otp, self.client_address[0])
                 if ok:
                     cookie_header = f"music_session={token}; Path=/; SameSite=Lax; Max-Age=604800"
 
@@ -417,7 +473,7 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
 
         elif path.startswith("/stream.mp3"):
             sec: OTPManager = self.server.security
-            if sec.is_enabled() and not sec.is_request_authenticated(self):
+            if sec.is_enabled() and not sec.is_request_authenticated(self, required_role="subscriber"):
                 self.send_response(401)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("WWW-Authenticate", "Bearer realm='MusicStreamer'")
@@ -431,7 +487,9 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             qs = parse_qs(parsed.query)
             query_url = qs.get("url", [None])[0]
             if query_url:
-                self.server.engine.post_command({"action": "play", "url": query_url})
+                # Play command on stream url requires admin privilege
+                if not sec.is_enabled() or sec.is_request_authenticated(self, required_role="admin"):
+                    self.server.engine.post_command({"action": "play", "url": query_url})
 
             self.send_response(200)
             self.send_header("Content-Type", "audio/mpeg")
@@ -484,6 +542,23 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
 
     def _handle_ws_command(self, payload: dict):
         action = payload.get("action")
+        sec: OTPManager = self.server.security
+
+        if action == "auth":
+            token = payload.get("token") or payload.get("otp")
+            if token:
+                ok, _, role = sec.verify_otp(str(token), self.client_address[0])
+                if ok:
+                    self.server.ws_hub.update_role(self.wfile, role)
+                    self.server.ws_hub.broadcast()
+            return
+
+        # Playback control & playlist actions via WebSocket require admin role
+        client_role = self.server.ws_hub.get_role(self.wfile)
+        if sec.is_enabled() and client_role != "admin":
+            print(f"[WebSocket] Rejected action '{action}' from non-admin client", file=sys.stderr)
+            return
+
         engine: AudioEngine = self.server.engine
         mgr: PlaybackManager = self.server.playback_mgr
 
@@ -620,11 +695,15 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
 
             ok = False
             session_token = ""
-            if token_input and sec.validate_session(token_input):
-                ok = True
-                session_token = token_input
+            role = ""
+            if token_input:
+                token_role = sec.get_token_role(token_input)
+                if token_role:
+                    ok = True
+                    session_token = token_input
+                    role = token_role
             elif otp_input:
-                ok, session_token = sec.verify_otp(otp_input, client_ip)
+                ok, session_token, role = sec.verify_otp(otp_input, client_ip)
 
             if ok:
                 self.send_response(200)
@@ -633,7 +712,7 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(
-                    json.dumps({"status": "ok", "authenticated": True, "token": session_token}).encode("utf-8")
+                    json.dumps({"status": "ok", "authenticated": True, "token": session_token, "role": role}).encode("utf-8")
                 )
             else:
                 self.send_response(403)
@@ -648,17 +727,38 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             return
 
         elif path == "/api/auth/status":
-            authed = sec.is_request_authenticated(self)
-            self._send_json({"status": "ok", "security_enabled": sec.is_enabled(), "authenticated": authed})
+            caller_role = sec.get_request_role(self)
+            authed = caller_role is not None if sec.is_enabled() else True
+            self._send_json({
+                "status": "ok",
+                "security_enabled": sec.is_enabled(),
+                "authenticated": authed,
+                "role": caller_role if authed else None,
+            })
             return
 
-        # 2. Protected Action Endpoints
-        if sec.is_enabled() and not sec.is_request_authenticated(self):
-            self.send_response(401)
+        # 2. Search Endpoint (accessible by both admin and subscriber, but subscriber cannot see playlist tracks)
+        if path == "/api/search":
+            caller_role = sec.get_request_role(self) or ("admin" if not sec.is_enabled() else "subscriber")
+            query = payload.get("query") or payload.get("q") or ""
+            count = int(payload.get("count", 5))
+            include_web = payload.get("web", True)
+            from music_streamer.search import search_unified
+            res = search_unified(query, count=count, include_web=include_web, database=self.server.db)
+            if caller_role == "subscriber" and sec.is_enabled():
+                if "local_matches" in res:
+                    res["local_matches"] = [m for m in res["local_matches"] if m.get("source_type") != "playlist"]
+                    res["local_count"] = len(res["local_matches"])
+            self._send_json({"status": "ok", **res})
+            return
+
+        # 3. Protected Control & Playlist Endpoints (Admin role required)
+        if sec.is_enabled() and not sec.is_request_authenticated(self, required_role="admin"):
+            self.send_response(403)
             self.send_header("Content-Type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
-            self.wfile.write(b'{"error": "Unauthorized. Please authenticate with OTP."}\n')
+            self.wfile.write(b'{"error": "Forbidden. Admin privileges required to control server, playback, and playlists."}\n')
             return
 
         engine: AudioEngine = self.server.engine
@@ -798,14 +898,6 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             res = self.server.playlist_mgr.queue_playlist(target, shuffle=bool(payload.get("shuffle", False)))
             self.server.ws_hub.broadcast()
             self._send_json(res)
-
-        elif path == "/api/search":
-            query = payload.get("query") or payload.get("q") or ""
-            count = int(payload.get("count", 5))
-            include_web = payload.get("web", True)
-            from music_streamer.search import search_unified
-            res = search_unified(query, count=count, include_web=include_web, database=self.server.db)
-            self._send_json({"status": "ok", **res})
 
         elif path == "/api/mode":
             mode = payload.get("mode")
