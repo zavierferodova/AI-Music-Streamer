@@ -96,18 +96,24 @@ When modifying or extending the codebase, AI agents MUST preserve the following 
   - **`subscriber`**: Read-only stream listening and metadata viewing only (blocked from modifying queue, settings, or accessing named playlists).
 - Constant-time string comparison (`secrets.compare_digest`) must be used for all passcode verifications to prevent side-channel timing attacks.
 
+### 3.6 Skill-Based Application Operation
+- When operating, controlling, or interacting with music streaming and playback on behalf of the user (such as playing tracks, searching, managing queue and playlists, adjusting volume/loop, or switching broadcast modes), AI agents **MUST** use and follow the `music-streamer` skill ([`.agents/skills/music-streamer/SKILL.md`](.agents/skills/music-streamer/SKILL.md)).
+
 ---
 
 ## 4. Agent Operational Workflows
 
-### 4.1 Search & Confirmation Protocol (Local-First)
+### 4.1 Operating via the `music-streamer` Skill
+AI agents must consult and execute workflows defined in the `music-streamer` skill ([`.agents/skills/music-streamer/SKILL.md`](.agents/skills/music-streamer/SKILL.md)) for all user-facing player operations, queue reordering, fair shuffle, playlist manipulation, and broadcast lifecycle commands.
+
+### 4.2 Search & Confirmation Protocol (Local-First)
 Before executing a music playback request on behalf of a user:
 1. **Search First**: Execute `~/music-streamer/search.py --json "<query>" 5`.
 2. **If `local_count > 0`**: Prompt the user whether to play from their local library or search the web.
 3. **If `local_count == 0` or User picks Web**: Present online options for user selection before playing.
 4. **Execute Playback**: Run `./play.py "<URL>" 80 yes`.
 
-### 4.2 Starting and Managing the Daemon
+### 4.3 Starting and Managing the Daemon
 ```bash
 # Start background broadcast daemon
 ./stream.py --daemon --port 8000
@@ -122,7 +128,7 @@ Before executing a music playback request on behalf of a user:
 ./stream.py stop
 ```
 
-### 4.3 Running Test Suites
+### 4.4 Running Test Suites
 Always run the complete test suite before submitting code changes:
 ```bash
 .venv/bin/pytest tests/ -v
