@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, KeyboardEvent } from "react";
+import { useState, useEffect, useCallback, KeyboardEvent, DragEvent } from "react";
 import {
   Library,
   Plus,
@@ -17,6 +17,7 @@ import {
   Music2,
   ChevronUp,
   ChevronDown,
+  GripVertical,
 } from "lucide-react";
 import { Playlist, Track } from "@/types";
 import {
@@ -60,6 +61,8 @@ export function PlaylistExplorer({
   const [playlistToDelete, setPlaylistToDelete] = useState<string | null>(null);
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   // Auto-select first playlist if none selected
   useEffect(() => {
@@ -199,6 +202,37 @@ export function PlaylistExplorer({
       showToast("Failed to move track", "error", "error_outline");
       loadPlaylistDetails(selectedPlaylistName, false);
     }
+  };
+
+  const handleDragStart = (e: DragEvent<HTMLDivElement>, idx: number) => {
+    setDraggedIndex(idx);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", idx.toString());
+  };
+
+  const handleDragOver = (e: DragEvent<HTMLDivElement>, idx: number) => {
+    if (draggedIndex === null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverIndex !== idx) {
+      setDragOverIndex(idx);
+    }
+  };
+
+  const handleDrop = (e: DragEvent<HTMLDivElement>, targetIdx: number) => {
+    if (draggedIndex === null) return;
+    e.preventDefault();
+    const sourceIdx = draggedIndex;
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+
+    if (sourceIdx === targetIdx) return;
+    handleMoveTrack(sourceIdx, targetIdx);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
   const filteredPlaylists = playlistSearchFilter
@@ -390,12 +424,36 @@ export function PlaylistExplorer({
                 ) : (
                   filteredTracks.map((t, idx) => {
                     const display = formatTrackDisplay(t.title, t.url);
+                    const isDragged = draggedIndex === idx;
+                    const isDragOver = dragOverIndex === idx;
+
                     return (
                       <div
                         key={idx}
-                        className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-800/40 hover:bg-slate-800/80 border border-slate-700/40 transition-all"
+                        draggable={!trackSearchFilter}
+                        onDragStart={(e) => handleDragStart(e, idx)}
+                        onDragOver={(e) => handleDragOver(e, idx)}
+                        onDrop={(e) => handleDrop(e, idx)}
+                        onDragEnd={handleDragEnd}
+                        className={`group flex items-center justify-between gap-3 p-2.5 rounded-xl border transition-all select-none ${
+                          isDragged
+                            ? "opacity-30 border-dashed border-indigo-400 bg-indigo-500/5 scale-95"
+                            : isDragOver
+                            ? "border-indigo-500/80 bg-indigo-500/10 scale-[1.01] shadow-lg shadow-indigo-500/10"
+                            : "bg-slate-800/40 hover:bg-slate-800/80 border-slate-700/40"
+                        }`}
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
+                          {/* Drag Grip Handle */}
+                          {!trackSearchFilter && (
+                            <div
+                              className="p-1 rounded-lg text-slate-500 group-hover:text-slate-300 hover:text-indigo-400 cursor-grab active:cursor-grabbing transition-colors shrink-0"
+                              title="Drag to reorder playlist track"
+                            >
+                              <GripVertical className="w-4 h-4" />
+                            </div>
+                          )}
+
                           <span className="text-[10px] font-mono text-slate-400 w-5 text-right shrink-0">
                             #{idx + 1}
                           </span>
