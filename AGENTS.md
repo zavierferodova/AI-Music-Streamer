@@ -106,26 +106,7 @@ When modifying or extending the codebase, AI agents MUST preserve the following 
 ### 4.1 Operating via the `music-streamer` Skill
 AI agents must consult and execute workflows defined in the `music-streamer` skill ([`.agents/skills/music-streamer/SKILL.md`](.agents/skills/music-streamer/SKILL.md)) for all user-facing player operations, queue reordering, fair shuffle, playlist manipulation, and broadcast lifecycle commands.
 
-### 4.2 Playback & Queue Decision Protocol (Local Exact → Web Exact → Ask if in Doubt)
-Before executing a music playback or queue request:
-1. **Search First**: Execute `~/music-streamer/search.py --json "<query>" 5`.
-2. **Local Exact Match**: If found in local library (`is_exact_match: true` or `match_score >= 0.90`), play or queue it directly without extra prompts.
-3. **Web Exact Match (if no local match)**: If not in local library but web search has an unambiguous exact match, play or queue it directly.
-4. **Ask User if in Doubt**: If there is ambiguity or doubt between local and web results (e.g. multiple versions, partial match, live vs. official), prompt the user using `ask_question` to choose the desired version before playing.
-5. **Execute Playback/Queue**:
-   - Direct Play: `./play.py "<URL>" 80 yes`
-   - Queue Track: `./playback.py add-url "<URL>" "<TITLE>" [--next|--after <target>|--before <target>|--position <N>]`
-
-### 4.3 Adding Music to Playlists Protocol (Playlist Name Resolution)
-When adding music to a playlist:
-1. **If Playlist Name is Specified**: Add the track directly via `./playlist.py add "<Playlist Name>" "<URL_or_query>"`.
-2. **If Playlist Name is NOT Specified**:
-   - Query existing playlists via `./playlist.py list --json`.
-   - If playlists exist, use `ask_question` to ask the user which playlist to store the track in (or offer to create a new one).
-   - If no playlists exist, ask the user for the name of the new playlist to create.
-   - Execute `./playlist.py add "<Selected Playlist>" "<URL_or_query>"`.
-
-### 4.4 Starting and Managing the Daemon
+### 4.2 Starting and Managing the Daemon
 ```bash
 # Start background broadcast daemon
 ./stream.py --daemon --port 8000
@@ -140,7 +121,7 @@ When adding music to a playlist:
 ./stream.py stop
 ```
 
-### 4.5 Running Test Suites
+### 4.3 Running Test Suites
 Always run the complete test suite before submitting code changes:
 ```bash
 .venv/bin/pytest tests/ -v
