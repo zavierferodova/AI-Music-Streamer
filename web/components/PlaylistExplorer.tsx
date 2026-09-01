@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, KeyboardEvent, DragEvent } from "react";
+import { useState, useEffect, useCallback, useMemo, KeyboardEvent, DragEvent } from "react";
 import {
   Library,
   Plus,
@@ -92,17 +92,34 @@ export function PlaylistExplorer({
       } catch (err) {
         console.error("loadPlaylistDetails error:", err);
       } finally {
-        setLoadingTracks(false);
+        if (showSkeleton) setLoadingTracks(false);
       }
     },
     []
   );
 
+  // Identify current playlist summary to detect changes in track_count or updated_at
+  const currentSummary = useMemo(() => {
+    if (!selectedPlaylistName) return null;
+    return (
+      playlists.find(
+        (p) => p.name.toLowerCase() === selectedPlaylistName.toLowerCase()
+      ) || null
+    );
+  }, [playlists, selectedPlaylistName]);
+
+  const currentSummaryKey = currentSummary
+    ? `${currentSummary.name}_${currentSummary.track_count}_${currentSummary.updated_at}`
+    : selectedPlaylistName || "";
+
   useEffect(() => {
     if (selectedPlaylistName) {
-      loadPlaylistDetails(selectedPlaylistName, true);
+      const isSwitchingPlaylist =
+        !activePlaylistData ||
+        activePlaylistData.name.toLowerCase() !== selectedPlaylistName.toLowerCase();
+      loadPlaylistDetails(selectedPlaylistName, isSwitchingPlaylist);
     }
-  }, [selectedPlaylistName, loadPlaylistDetails]);
+  }, [selectedPlaylistName, currentSummaryKey, loadPlaylistDetails]);
 
   // Actions
   const handleCreateNewPlaylist = () => {

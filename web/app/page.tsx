@@ -51,6 +51,7 @@ export default function Home() {
     seekTo,
     seekRelative,
     retryServerConnection,
+    refreshStatus,
     sendCommand,
   } = useStreamStatus();
 
@@ -213,7 +214,7 @@ export default function Home() {
             onPlayPlaylist={handlePlayPlaylist}
             onQueuePlaylist={handleQueuePlaylist}
             onPlaySingleUrl={handlePlaySingleUrl}
-            onRefreshStatus={() => retryServerConnection()}
+            onRefreshStatus={refreshStatus}
           />
         )}
       </div>
@@ -241,7 +242,7 @@ export default function Home() {
             setIsSaveModalOpen(false);
             setSaveModalTrack(null);
           }}
-          onRefreshPlaylists={() => retryServerConnection()}
+          onRefreshPlaylists={refreshStatus}
         />
       )}
 

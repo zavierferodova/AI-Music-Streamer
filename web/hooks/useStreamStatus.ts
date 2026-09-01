@@ -301,6 +301,18 @@ export function useStreamStatus() {
     });
   }, []);
 
+  const refreshStatus = useCallback(async () => {
+    try {
+      const res = await fetchServerStatus();
+      if (res) {
+        setStatus(res);
+        if (typeof res.volume === "number") setVolume(res.volume);
+      }
+    } catch (err) {
+      console.error("refreshStatus error:", err);
+    }
+  }, []);
+
   return {
     status,
     connectionState,
@@ -336,5 +348,6 @@ export function useStreamStatus() {
     seekTo,
     seekRelative,
     retryServerConnection,
+    refreshStatus,
   };
 }
