@@ -4,6 +4,9 @@ playback.py — Manage persistent playback list & track history
 Usage:
   ./playback.py add <URL|query> [--next|--last|--after <target>|--before <target>|--position <N>]
   ./playback.py add-url <URL> [TITLE] [--next|--last|--after <target>|--before <target>|--position <N>]
+  ./playback.py add-bulk <URL1|QUERY1> <URL2|QUERY2> ... [--next|--after <target>|--position <N>]
+  ./playback.py add-bulk --file <tracks.txt|tracks.json> [--next|--after <target>|--position <N>]
+  ./playback.py add-bulk - [--next|--after <target>|--position <N>]  # Read from stdin
   ./playback.py add <URL|query> [next|last|after <target>|before <target>|<N>]
   ./playback.py list [--json]
   ./playback.py move <FROM_N|TITLE> <TO_N|top|next|bottom>

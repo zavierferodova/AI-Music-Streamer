@@ -206,6 +206,229 @@ class PlaybackManager:
 
         return track_res
 
+    def add_tracks_bulk(
+        self,
+        items: List[Any],
+        auto_fetch: bool = True,
+        order: Optional[str] = None,
+        after: Optional[Any] = None,
+        before: Optional[Any] = None,
+        position: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Adds multiple tracks to the playback list in bulk with optional atomic batch placement.
+        Each item in `items` can be:
+          - A string (URL or search query)
+          - A dictionary: {"url": str, "title": Optional[str], "thumbnail": Optional[str]}
+        Supports batch placement:
+          - order='next' / 'top': Inserts the whole batch immediately after the playing track.
+          - order='last' / 'bottom': Appends the batch to the end of the list (default).
+          - after=<target>: Inserts the batch immediately following target track.
+          - before=<target>: Inserts the batch immediately preceding target track.
+          - position=<N>: Inserts the batch starting at 1-based position N.
+        """
+        if not items:
+            return {"status": "ok", "added_count": 0, "already_exists_count": 0, "tracks": []}
+
+        resolved_items = []
+        for it in items:
+            if isinstance(it, dict):
+                u = (it.get("url") or it.get("query") or "").strip()
+                t = (it.get("title") or "").strip()
+                th = (it.get("thumbnail") or "").strip()
+            else:
+                u = str(it).strip()
+                t = ""
+                th = ""
+
+            if not u:
+                continue
+
+            # If search query, resolve via YouTube search
+            if not u.startswith("http://") and not u.startswith("https://"):
+                from music_streamer.search import search_music
+
+                res = search_music(u, num=1)
+                if res.results:
+                    u = res.results[0].url
+                    t = res.results[0].title
+                    th = res.results[0].thumbnail
+
+            if (not t or t == u) and auto_fetch and (u.startswith("http://") or u.startswith("https://")):
+                from music_streamer.search import fetch_track_metadata
+
+                meta = fetch_track_metadata(u)
+                if meta.get("title") and meta["title"] != u:
+                    t = meta["title"]
+                if not th and meta.get("thumbnail"):
+                    th = meta["thumbnail"]
+
+            if not t or t == u:
+                m = re.search(r"(?:v=|youtu\.be/|shorts/|embed/|watch\?.*v=)([a-zA-Z0-9_-]{11})", u)
+                t = f"YouTube Track ({m.group(1)})" if m else u
+
+            if not th:
+                th = get_thumbnail_for_url(u)
+
+            resolved_items.append((u, t, th))
+
+        if not resolved_items:
+            return {"status": "ok", "added_count": 0, "already_exists_count": 0, "tracks": []}
+
+        added_tracks = []
+        already_exists_count = 0
+
+        for u, t, th in resolved_items:
+            res = self.db.add_track(url=u, title=t, thumbnail=th, status="queued")
+            if res.get("already_exists"):
+                already_exists_count += 1
+            added_tracks.append(res)
+
+        batch_ids = [t["id"] for t in added_tracks]
+
+        # Resolve custom batch placement
+        order_type = None
+        target_spec = None
+
+        if after is not None:
+            order_type = "after"
+            target_spec = after
+        elif before is not None:
+            order_type = "before"
+            target_spec = before
+        elif position is not None:
+            if isinstance(position, str):
+                pos_lower = position.strip().lower()
+                if pos_lower in ["next", "top", "first", "next-up"]:
+                    order_type = "next"
+                elif pos_lower in ["last", "bottom", "end"]:
+                    order_type = "last"
+                elif pos_lower.isdigit():
+                    order_type = "position"
+                    target_spec = int(pos_lower)
+                else:
+                    order_type = "position"
+                    target_spec = position
+            else:
+                order_type = "position"
+                target_spec = int(position)
+        elif order is not None:
+            order_str = str(order).strip()
+            order_lower = order_str.lower()
+            if order_lower in ["next", "top", "first", "next-up"]:
+                order_type = "next"
+            elif order_lower in ["last", "bottom", "end"]:
+                order_type = "last"
+            elif order_lower.startswith("after:") or order_lower.startswith("after "):
+                order_type = "after"
+                target_spec = order_str[5:].strip().lstrip(":").strip()
+            elif order_lower.startswith("before:") or order_lower.startswith("before "):
+                order_type = "before"
+                target_spec = order_str[6:].strip().lstrip(":").strip()
+            elif order_lower.startswith("pos:") or order_lower.startswith("position:"):
+                order_type = "position"
+                target_spec = order_str.split(":", 1)[1].strip()
+            elif order_lower.isdigit():
+                order_type = "position"
+                target_spec = int(order_lower)
+            else:
+                order_type = "position"
+                target_spec = order_str
+
+        all_tracks = self.db.get_tracks()
+        remaining_tracks = [t for t in all_tracks if t["id"] not in batch_ids]
+
+        if order_type and order_type != "last" and remaining_tracks:
+            to_idx = len(remaining_tracks)
+            if order_type == "next":
+                playing_idx = next((i for i, t in enumerate(remaining_tracks) if t.get("status") == "playing"), None)
+                if playing_idx is not None:
+                    to_idx = playing_idx + 1
+                else:
+                    first_unplayed = next((i for i, t in enumerate(remaining_tracks) if t.get("status") != "played"), 0)
+                    to_idx = first_unplayed
+
+            elif order_type == "after":
+                ref_idx = self._find_index_in_tracks(remaining_tracks, target_spec)
+                to_idx = ref_idx + 1 if ref_idx is not None else len(remaining_tracks)
+
+            elif order_type == "before":
+                ref_idx = self._find_index_in_tracks(remaining_tracks, target_spec)
+                to_idx = ref_idx if ref_idx is not None else 0
+
+            elif order_type == "position":
+                if isinstance(target_spec, str) and target_spec.isdigit():
+                    target_spec = int(target_spec)
+                if isinstance(target_spec, int):
+                    to_idx = max(0, min(len(remaining_tracks), target_spec - 1))
+                else:
+                    ref_idx = self._find_index_in_tracks(remaining_tracks, target_spec)
+                    to_idx = ref_idx if ref_idx is not None else len(remaining_tracks)
+
+            # Clamp so to_idx is not before played tracks
+            first_unplayed = next((i for i, t in enumerate(remaining_tracks) if t.get("status") != "played"), 0)
+            if to_idx < first_unplayed:
+                to_idx = first_unplayed
+
+            to_idx = max(0, min(len(remaining_tracks), to_idx))
+            reordered_ids = [t["id"] for t in remaining_tracks[:to_idx]] + batch_ids + [t["id"] for t in remaining_tracks[to_idx:]]
+            self.db.reorder_tracks(reordered_ids)
+
+        all_tracks = self.db.get_tracks()
+        pos_map = {t["id"]: i + 1 for i, t in enumerate(all_tracks)}
+
+        final_tracks = []
+        for t in added_tracks:
+            up = self.db.get_track_by_id(t["id"]) or t
+            up["position"] = pos_map.get(t["id"], 0)
+            up["already_exists"] = t.get("already_exists", False)
+            final_tracks.append(up)
+
+        return {
+            "status": "ok",
+            "added_count": len(final_tracks),
+            "already_exists_count": already_exists_count,
+            "tracks": final_tracks,
+        }
+
+    def _find_index_in_tracks(self, tracks: List[Dict[str, Any]], query_or_id_or_index: Any) -> Optional[int]:
+        """Helper to find index of a track inside a specific track list."""
+        if not tracks or query_or_id_or_index is None:
+            return None
+
+        if isinstance(query_or_id_or_index, int):
+            if 0 <= query_or_id_or_index < len(tracks):
+                return query_or_id_or_index
+            return None
+
+        query_str = str(query_or_id_or_index).strip()
+        if query_str.isdigit():
+            idx = int(query_str) - 1
+            if 0 <= idx < len(tracks):
+                return idx
+
+        for i, t in enumerate(tracks):
+            if t.get("id") == query_str or t.get("url") == query_str:
+                return i
+
+        q_lower = query_str.lower()
+        for i, t in enumerate(tracks):
+            title = (t.get("title") or "").lower()
+            if q_lower in title:
+                return i
+
+        from music_streamer.db import calculate_match_similarity
+        best_idx = None
+        best_score = 0.0
+        for i, t in enumerate(tracks):
+            title = t.get("title") or ""
+            score = calculate_match_similarity(query_str, title)
+            if score > best_score and score >= 0.5:
+                best_score = score
+                best_idx = i
+
+        return best_idx
+
     def mark_playing_url(
         self,
         url: str,

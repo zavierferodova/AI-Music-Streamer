@@ -226,6 +226,9 @@ def build_playback_parser() -> argparse.ArgumentParser:
         choices=[
             "add",
             "add-url",
+            "add-bulk",
+            "add-many",
+            "bulk-add",
             "list",
             "ls",
             "show",
@@ -248,12 +251,13 @@ def build_playback_parser() -> argparse.ArgumentParser:
         help="Subcommand",
     )
     parser.add_argument("target", nargs="*", help="Arguments for subcommand (URL, query, index, etc.)")
+    parser.add_argument("--file", "-f", help="Path to text or JSON file containing tracks to add in bulk")
     parser.add_argument("--json", action="store_true", help="Output list in JSON format")
-    parser.add_argument("--next", action="store_true", help="Add track to play immediately next (after current track)")
-    parser.add_argument("--last", action="store_true", help="Append track to end of playback list (default)")
-    parser.add_argument("--after", help="Insert track immediately after specified track (by title, URL, index, or ID)")
-    parser.add_argument("--before", help="Insert track immediately before specified track (by title, URL, index, or ID)")
-    parser.add_argument("--position", help="Insert track at specific 1-based position in playback list")
+    parser.add_argument("--next", action="store_true", help="Add track(s) to play immediately next (after current track)")
+    parser.add_argument("--last", action="store_true", help="Append track(s) to end of playback list (default)")
+    parser.add_argument("--after", help="Insert track(s) immediately after specified track (by title, URL, index, or ID)")
+    parser.add_argument("--before", help="Insert track(s) immediately before specified track (by title, URL, index, or ID)")
+    parser.add_argument("--position", help="Insert track(s) starting at specific 1-based position in playback list")
     parser.add_argument("--order", help="Custom placement order: 'next', 'last', 'after:<target>', 'before:<target>', '<position>'")
     return parser
 
@@ -633,6 +637,89 @@ def handle_playback(args: argparse.Namespace) -> int:
         else:
             print(f"Added to playback list: {t['title']}{pos_str}")
         send_ipc_command({"action": "playback_update"})
+        return 0
+
+    elif cmd in ["add-bulk", "add-many", "bulk-add"]:
+        rem_targets, order_kwargs = extract_playback_order(args, targets)
+        items_to_add: List[Any] = []
+
+        # 1. From file if specified
+        file_path = getattr(args, "file", None)
+        if file_path:
+            p = Path(file_path).expanduser().resolve()
+            if not p.exists():
+                print(f"Error: File not found: {file_path}", file=sys.stderr)
+                return 1
+            content = p.read_text(encoding="utf-8").strip()
+            if content.startswith("[") and content.endswith("]"):
+                try:
+                    parsed = json.loads(content)
+                    if isinstance(parsed, list):
+                        items_to_add.extend(parsed)
+                except Exception:
+                    for line in content.splitlines():
+                        if line.strip() and not line.strip().startswith("#"):
+                            items_to_add.append(line.strip())
+            else:
+                for line in content.splitlines():
+                    if line.strip() and not line.strip().startswith("#"):
+                        items_to_add.append(line.strip())
+
+        # 2. From stdin if target is '-'
+        if rem_targets and rem_targets[0] == "-":
+            stdin_content = sys.stdin.read().strip()
+            if stdin_content.startswith("[") and stdin_content.endswith("]"):
+                try:
+                    parsed = json.loads(stdin_content)
+                    if isinstance(parsed, list):
+                        items_to_add.extend(parsed)
+                except Exception:
+                    for line in stdin_content.splitlines():
+                        if line.strip() and not line.strip().startswith("#"):
+                            items_to_add.append(line.strip())
+            else:
+                for line in stdin_content.splitlines():
+                    if line.strip() and not line.strip().startswith("#"):
+                        items_to_add.append(line.strip())
+
+        # 3. From CLI positional targets
+        elif rem_targets:
+            joined = " ".join(rem_targets)
+            if joined.startswith("[") and joined.endswith("]"):
+                try:
+                    parsed = json.loads(joined)
+                    if isinstance(parsed, list):
+                        items_to_add.extend(parsed)
+                except Exception:
+                    items_to_add.extend(rem_targets)
+            else:
+                items_to_add.extend(rem_targets)
+
+        if not items_to_add:
+            print("Usage: playback.py add-bulk <URL1|QUERY1> <URL2|QUERY2> ... [--file FILE] [--next|--after <target>|--position <N>]", file=sys.stderr)
+            return 1
+
+        print(f"Adding {len(items_to_add)} tracks to playback list in bulk...")
+        res = playback_mgr.add_tracks_bulk(items_to_add, **order_kwargs)
+        send_ipc_command({"action": "playback_update"})
+
+        if args.json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+            return 0
+
+        tracks = res.get("tracks", [])
+        added_count = res.get("added_count", 0)
+        exists_count = res.get("already_exists_count", 0)
+
+        print("═" * 60)
+        print(f" ✓ BULK ADDED {added_count} TRACKS (New: {added_count - exists_count}, Existing: {exists_count})")
+        print("═" * 60)
+        for t in tracks:
+            pos = f"#{t['position']}" if t.get("position") else "—"
+            dup_tag = " (already existed)" if t.get("already_exists") else ""
+            print(f"  [{pos:>3s}] 🎵 {t['title']}{dup_tag}")
+            print(f"        {t['url']}")
+        print("═" * 60)
         return 0
 
     elif cmd in ["list", "ls", "show"]:

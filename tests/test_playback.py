@@ -457,6 +457,55 @@ class TestPlaybackManager(unittest.TestCase):
         titles2 = [t["title"] for t in state2["tracks"]]
         self.assertEqual(titles2[0], "Song 3")
 
+    def test_add_tracks_bulk_default_and_dicts(self):
+        """Verify adding multiple tracks in bulk with strings and dicts."""
+        items = [
+            "https://youtube.com/watch?v=b1",
+            {"url": "https://youtube.com/watch?v=b2", "title": "Bulk Song 2"},
+            {"url": "https://youtube.com/watch?v=b3", "title": "Bulk Song 3"},
+        ]
+        res = self.playback.add_tracks_bulk(items)
+        self.assertEqual(res["added_count"], 3)
+        self.assertEqual(res["already_exists_count"], 0)
+
+        state = self.playback.get_state()
+        self.assertEqual(state["total_count"], 3)
+        self.assertEqual(state["tracks"][1]["title"], "Bulk Song 2")
+        self.assertEqual(state["tracks"][2]["title"], "Bulk Song 3")
+
+    def test_add_tracks_bulk_order_next_and_after(self):
+        """Verify bulk additions with batch placement: order='next' and after=<target>."""
+        self.playback.add_track("https://youtube.com/watch?v=init1", "Initial 1")
+        self.playback.add_track("https://youtube.com/watch?v=init2", "Initial 2")
+        self.playback.mark_playing_url("https://youtube.com/watch?v=init1", "Initial 1")
+
+        # Bulk add 2 tracks to play NEXT
+        res = self.playback.add_tracks_bulk(
+            [
+                {"url": "https://youtube.com/watch?v=n1", "title": "Next Batch 1"},
+                {"url": "https://youtube.com/watch?v=n2", "title": "Next Batch 2"},
+            ],
+            order="next",
+        )
+        self.assertEqual(res["added_count"], 2)
+
+        state = self.playback.get_state()
+        titles = [t["title"] for t in state["tracks"]]
+        # Initial 1 (playing) -> Next Batch 1 -> Next Batch 2 -> Initial 2
+        self.assertEqual(titles, ["Initial 1", "Next Batch 1", "Next Batch 2", "Initial 2"])
+
+        # Bulk add 2 tracks AFTER Initial 2
+        res2 = self.playback.add_tracks_bulk(
+            [
+                {"url": "https://youtube.com/watch?v=a1", "title": "After Batch 1"},
+                {"url": "https://youtube.com/watch?v=a2", "title": "After Batch 2"},
+            ],
+            after="Initial 2",
+        )
+        state2 = self.playback.get_state()
+        titles2 = [t["title"] for t in state2["tracks"]]
+        self.assertEqual(titles2, ["Initial 1", "Next Batch 1", "Next Batch 2", "Initial 2", "After Batch 1", "After Batch 2"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -167,6 +167,7 @@ Manages the ephemeral playback list, queued tracks, and fair shuffle cycles.
 | `list [--json]` | Lists all tracks (Played, Now Playing, Upcoming). |
 | `add "<QUERY_OR_URL>" [OPTIONS]` | Adds track to queue (deduplicated). Supports `--next`, `--last`, `--after <TARGET>`, `--before <TARGET>`, `--position <N>`, or positional shorthand (`next`, `last`, `after <TARGET>`, `before <TARGET>`). |
 | `add-url "<URL>" "<TITLE>" [OPTIONS]` | Appends explicit URL and Title with optional placement (`--next`, `--after <TARGET>`, `--before <TARGET>`, `--position <N>`). |
+| `add-bulk <TRACKS...> [--file FILE] [OPTIONS]` | Adds multiple tracks/URLs in bulk (supports positional arguments, `--file <txt/json>`, stdin `-`, and batch placement `--next`, `--after <TARGET>`, `--before <TARGET>`, `--position <N>`). |
 | `move <FROM|TITLE> <TO|top|next|bottom>` | Moves a queued track by 1-based index or title to destination. |
 | `play-next <N|TITLE|URL>` | Moves specified track to play immediately next in queue. |
 | `reorder <N1> <N2> ...` | Reorders active queue by 1-based index sequence or track IDs. |

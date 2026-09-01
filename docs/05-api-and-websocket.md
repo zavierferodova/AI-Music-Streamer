@@ -126,7 +126,23 @@ Appends or inserts a track to the ephemeral playback queue (deduplicated) with o
   "next": true
 }
 ```
-*(All ordering fields `order`, `after`, `before`, `position`, `next` are optional)*
+#### `POST /api/playback/add_bulk`
+Adds multiple tracks to the playback queue in bulk with optional atomic batch placement.
+
+**Request Payload:**
+```json
+{
+  "tracks": [
+    "https://www.youtube.com/watch?v=1",
+    "https://www.youtube.com/watch?v=2",
+    {"url": "https://www.youtube.com/watch?v=3", "title": "Song 3"}
+  ],
+  "order": "next",
+  "after": "Song 1",
+  "before": 3,
+  "position": 2
+}
+```
 
 #### `POST /api/playback/remove`
 Removes a track from the playback list by ID or index.

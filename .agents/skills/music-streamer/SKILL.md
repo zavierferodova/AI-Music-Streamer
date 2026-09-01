@@ -211,7 +211,7 @@ If the user provides an explicit direct URL (e.g., `https://www.youtube.com/watc
 ~/music-streamer/loop.py off                # Disable repeat (stops after playing once)
 ~/music-streamer/loop.py toggle             # Flip loop setting
 
-# Playback list management (Strictly deduplicated with custom ordering)
+# Playback list management (Strictly deduplicated with custom ordering & bulk addition)
 ~/music-streamer/playback.py list [--json]     # Show full tracklist (Played, Playing, Upcoming)
 ~/music-streamer/playback.py add "Alan Walker" # Append to end of queue (default)
 ~/music-streamer/playback.py add "Alan Walker" --next   # Add to play immediately next after current
@@ -222,6 +222,12 @@ If the user provides an explicit direct URL (e.g., `https://www.youtube.com/watc
 ~/music-streamer/playback.py add "Alan Walker" after "Wirang" # Shorthand after syntax
 ~/music-streamer/playback.py add-url "URL" "Title" --next # Add URL to play next
 ~/music-streamer/playback.py add-url "URL" "Title" --after "Wirang" # Add URL after track
+~/music-streamer/playback.py add-bulk "Song 1" "Song 2" "Song 3" # Bulk add multiple songs/URLs
+~/music-streamer/playback.py add-bulk "Song 1" "Song 2" --next   # Bulk add to play immediately next
+~/music-streamer/playback.py add-bulk "Song 1" "Song 2" --after "Wirang" # Bulk add after specific song
+~/music-streamer/playback.py add-bulk --file /path/to/tracks.txt # Bulk add from text file (one query/URL per line)
+~/music-streamer/playback.py add-bulk --file /path/to/tracks.json # Bulk add from JSON array file
+cat tracks.txt | ~/music-streamer/playback.py add-bulk - # Bulk add from piped stdin
 ~/music-streamer/playback.py move 4 1          # Move 4th track to 1st position (1-indexed)
 ~/music-streamer/playback.py move "FANCY" top  # Move track by name to top of queue
 ~/music-streamer/playback.py play-next "FANCY" # Move track to play immediately next

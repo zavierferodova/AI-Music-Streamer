@@ -57,6 +57,17 @@ class TestCLI(unittest.TestCase):
         args_order = parser.parse_args(["add", "https://youtube.com/watch?v=123", "--order", "next"])
         self.assertEqual(args_order.order, "next")
 
+        # Test add-bulk subcommands and --file flag
+        args_bulk = parser.parse_args(["add-bulk", "Song 1", "Song 2", "Song 3", "--next"])
+        self.assertEqual(args_bulk.command, "add-bulk")
+        self.assertEqual(args_bulk.target, ["Song 1", "Song 2", "Song 3"])
+        self.assertTrue(args_bulk.next)
+
+        args_bulk_file = parser.parse_args(["add-bulk", "--file", "tracks.txt", "--position", "2"])
+        self.assertEqual(args_bulk_file.command, "add-bulk")
+        self.assertEqual(args_bulk_file.file, "tracks.txt")
+        self.assertEqual(args_bulk_file.position, "2")
+
         args_list = parser.parse_args(["list", "--json"])
         self.assertEqual(args_list.command, "list")
         self.assertTrue(args_list.json)

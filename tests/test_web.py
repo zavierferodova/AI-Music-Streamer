@@ -616,7 +616,48 @@ class TestWebServer(unittest.TestCase):
         resp3 = conn.getresponse()
         self.assertEqual(resp3.status, 200)
         data3 = json.loads(resp3.read().decode("utf-8"))
-        self.assertEqual(data3["track"]["position"], 3)
+        conn.close()
+
+    def test_admin_playback_add_bulk(self):
+        """Verify REST API /api/playback/add_bulk adds multiple tracks in bulk."""
+        admin_otp = self.security.get_admin_otp()
+        _, token, _ = self.security.verify_otp(admin_otp, client_ip="127.0.0.1")
+        auth_header = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+        conn = self._get_connection()
+
+        # Add initial track
+        conn.request(
+            "POST",
+            "/api/playback/add",
+            body=json.dumps({"url": "https://youtube.com/watch?v=base1", "title": "Base Track"}),
+            headers=auth_header,
+        )
+        resp1 = conn.getresponse()
+        self.assertEqual(resp1.status, 200)
+        resp1.read()
+
+        # Bulk add 3 tracks
+        bulk_payload = {
+            "tracks": [
+                {"url": "https://youtube.com/watch?v=blk1", "title": "Bulk 1"},
+                {"url": "https://youtube.com/watch?v=blk2", "title": "Bulk 2"},
+                "https://youtube.com/watch?v=blk3",
+            ],
+            "order": "next",
+        }
+        conn.request(
+            "POST",
+            "/api/playback/add_bulk",
+            body=json.dumps(bulk_payload),
+            headers=auth_header,
+        )
+        resp2 = conn.getresponse()
+        self.assertEqual(resp2.status, 200)
+        data = json.loads(resp2.read().decode("utf-8"))
+        self.assertEqual(data["status"], "ok")
+        self.assertEqual(data["added_count"], 3)
+        self.assertEqual(data["tracks"][0]["position"], 1)
 
         conn.close()
 

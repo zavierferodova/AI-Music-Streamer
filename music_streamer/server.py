@@ -1005,6 +1005,18 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             else:
                 self._send_json({"status": "ok", "already_exists": False, "track": t})
 
+        elif path in ["/api/playback/add_bulk", "/api/queue/add_bulk", "/api/playback/bulk_add"]:
+            items = payload.get("tracks") or payload.get("items") or []
+            order = payload.get("order")
+            after = payload.get("after")
+            before = payload.get("before")
+            position = payload.get("position")
+            if payload.get("next") is True:
+                order = "next"
+            res = mgr.add_tracks_bulk(items, order=order, after=after, before=before, position=position)
+            self.server.ws_hub.broadcast()
+            self._send_json(res)
+
         elif path in ["/api/playback/clear", "/api/queue/clear"]:
             mgr.clear_all()
             self._send_json({"status": "ok"})
