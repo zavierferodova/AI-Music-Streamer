@@ -30,7 +30,7 @@ import {
   movePlaylistTrack,
   reorderPlaylistTracks,
 } from "@/lib/api";
-import { formatTrackDisplay, matchesSearchQuery } from "@/lib/utils";
+import { formatTrackDisplay, getThumbnailFromUrl, matchesSearchQuery } from "@/lib/utils";
 import { useToast } from "@/hooks/useToast";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { PromptInputModal } from "./PromptInputModal";
@@ -154,7 +154,8 @@ export function PlaylistExplorer({
     const val = newTrackInput.trim();
     setNewTrackInput("");
     showToast(`Adding track to "${selectedPlaylistName}"...`, "info", "playlist_add");
-    const result = await addTrackToPlaylist(selectedPlaylistName, val);
+    const thumb = getThumbnailFromUrl(val);
+    const result = await addTrackToPlaylist(selectedPlaylistName, val, "", thumb || undefined);
     if (result.success) {
       if (result.already_exists) {
         showToast(`Track "${result.track?.title || val}" already exists in playlist "${selectedPlaylistName}"`, "warning");
@@ -458,17 +459,20 @@ export function PlaylistExplorer({
                           <span className="text-[10px] font-mono text-slate-400 w-4 sm:w-5 text-right shrink-0">
                             #{idx + 1}
                           </span>
-                          {t.thumbnail ? (
-                            <img
-                              src={t.thumbnail}
-                              alt={display.title}
-                              className="w-8 h-8 rounded-lg object-cover shrink-0 border border-slate-700"
-                            />
-                          ) : (
-                            <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 shrink-0">
-                              <Music2 className="w-4 h-4" />
-                            </div>
-                          )}
+                          {(() => {
+                            const thumb = t.thumbnail || getThumbnailFromUrl(t.url);
+                            return thumb ? (
+                              <img
+                                src={thumb}
+                                alt={display.title}
+                                className="w-8 h-8 rounded-lg object-cover shrink-0 border border-slate-700"
+                              />
+                            ) : (
+                              <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 shrink-0">
+                                <Music2 className="w-4 h-4" />
+                              </div>
+                            );
+                          })()}
                           <div className="min-w-0 flex-1">
                             <div className="text-xs font-semibold text-white truncate">
                               {display.title}

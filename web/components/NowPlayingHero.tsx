@@ -23,7 +23,7 @@ import {
   Clock,
 } from "lucide-react";
 import { ServerStatus } from "@/types";
-import { formatTrackDisplay, copyToClipboard, formatSeconds } from "@/lib/utils";
+import { formatTrackDisplay, copyToClipboard, formatSeconds, getThumbnailFromUrl } from "@/lib/utils";
 import { VolumeControls } from "./VolumeControls";
 import { useToast } from "@/hooks/useToast";
 
@@ -73,7 +73,7 @@ export function NowPlayingHero({
 
   const rawTitle = status?.now_playing?.title || (isPlaying ? "Audio stream decoding..." : "Idle (Ready to play)");
   const rawUrl = status?.now_playing?.url || "";
-  const thumbUrl = status?.now_playing?.thumbnail;
+  const thumbUrl = status?.now_playing?.thumbnail || getThumbnailFromUrl(rawUrl);
   const display = formatTrackDisplay(rawTitle, rawUrl);
 
   const serverElapsed = status?.now_playing?.elapsed_seconds || 0;

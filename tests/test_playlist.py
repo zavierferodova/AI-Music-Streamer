@@ -252,6 +252,34 @@ class TestPlaylistManager(unittest.TestCase):
         titles3 = [t["title"] for t in self.playlist_mgr.get_playlist("Reorder PL")["tracks"]]
         self.assertEqual(titles3, ["Track 1", "Track 3", "Track 5", "Track 2", "Track 4"])
 
+    def test_playlist_thumbnail_preservation_and_auto_resolution(self):
+        """Verify thumbnail is preserved when provided, and auto-resolved from YouTube URL if omitted."""
+        self.playlist_mgr.create_playlist("Thumbnail Test")
+
+        # 1. Track added with explicit thumbnail (e.g. from playback list / search result)
+        t1 = self.playlist_mgr.add_track(
+            "Thumbnail Test",
+            url="https://youtube.com/watch?v=custom_vid",
+            title="Custom Song",
+            thumbnail="https://example.com/custom.jpg",
+            auto_fetch=False,
+        )
+        self.assertEqual(t1["thumbnail"], "https://example.com/custom.jpg")
+
+        # 2. Track added without thumbnail but valid YouTube URL -> auto resolves YouTube thumbnail
+        t2 = self.playlist_mgr.add_track(
+            "Thumbnail Test",
+            url="https://www.youtube.com/watch?v=78Y0SxVVxP4",
+            title="Artist - Auto Resolved Song",
+            auto_fetch=False,
+        )
+        self.assertEqual(t2["thumbnail"], "https://i.ytimg.com/vi/78Y0SxVVxP4/hqdefault.jpg")
+
+        # Verify playlist fetch has thumbnails
+        pl = self.playlist_mgr.get_playlist("Thumbnail Test")
+        self.assertEqual(pl["tracks"][0]["thumbnail"], "https://example.com/custom.jpg")
+        self.assertEqual(pl["tracks"][1]["thumbnail"], "https://i.ytimg.com/vi/78Y0SxVVxP4/hqdefault.jpg")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -765,8 +765,9 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             target = payload.get("playlist") or payload.get("name") or payload.get("id")
             url = payload.get("url")
             title = payload.get("title", "")
+            thumbnail = payload.get("thumbnail")
             if target and url:
-                self.server.playlist_mgr.add_track(target, url=url, title=title)
+                self.server.playlist_mgr.add_track(target, url=url, title=title, thumbnail=thumbnail)
         elif action == "playlist_remove":
             target = payload.get("playlist") or payload.get("name") or payload.get("id")
             idx = payload.get("index") if payload.get("index") is not None else payload.get("id")
@@ -1107,7 +1108,8 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             else:
                 url = payload.get("url")
                 title = payload.get("title", "")
-                t = self.server.playlist_mgr.add_track(target, url=url, title=title)
+                thumbnail = payload.get("thumbnail")
+                t = self.server.playlist_mgr.add_track(target, url=url, title=title, thumbnail=thumbnail)
                 self.server.ws_hub.broadcast()
                 if t and t.get("already_exists"):
                     self._send_json({

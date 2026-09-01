@@ -69,16 +69,22 @@ class PlaylistManager:
             r = res.results[0]
             url = r.url
             title = r.title
+            if not thumbnail:
+                thumbnail = r.thumbnail
 
-        # Auto-fetch title from URL if missing
-        if (not title or title == url) and auto_fetch and (url.startswith("http://") or url.startswith("https://")):
+        # Auto-fetch title or thumbnail from URL if missing
+        if (not title or title == url or not thumbnail) and auto_fetch and (url.startswith("http://") or url.startswith("https://")):
             from music_streamer.search import fetch_track_metadata
 
             meta = fetch_track_metadata(url)
-            if meta.get("title") and meta["title"] != url:
+            if meta.get("title") and meta["title"] != url and (not title or title == url):
                 title = meta["title"]
             if not thumbnail and meta.get("thumbnail"):
                 thumbnail = meta["thumbnail"]
+
+        if not thumbnail and (url.startswith("http://") or url.startswith("https://")):
+            from music_streamer.playback import get_thumbnail_for_url
+            thumbnail = get_thumbnail_for_url(url)
 
         if not title or title == url:
             import re
@@ -130,12 +136,16 @@ class PlaylistManager:
                     t = res.results[0].title
                     th = res.results[0].thumbnail
 
-            if (not t or t == u) and auto_fetch and (u.startswith("http://") or u.startswith("https://")):
+            if (not t or t == u or not th) and auto_fetch and (u.startswith("http://") or u.startswith("https://")):
                 meta = fetch_track_metadata(u)
-                if meta.get("title") and meta["title"] != u:
+                if meta.get("title") and meta["title"] != u and (not t or t == u):
                     t = meta["title"]
                 if not th and meta.get("thumbnail"):
                     th = meta["thumbnail"]
+
+            if not th and (u.startswith("http://") or u.startswith("https://")):
+                from music_streamer.playback import get_thumbnail_for_url
+                th = get_thumbnail_for_url(u)
 
             if not t or t == u:
                 m = re.search(r"(?:v=|youtu\.be/|shorts/|embed/|watch\?.*v=)([a-zA-Z0-9_-]{11})", u)

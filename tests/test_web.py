@@ -396,7 +396,12 @@ class TestWebServer(unittest.TestCase):
         conn.request(
             "POST",
             "/api/playlist/add",
-            body=json.dumps({"playlist": "Chill Lounge", "url": "https://youtube.com/watch?v=chill1", "title": "Chill Song 1"}),
+            body=json.dumps({
+                "playlist": "Chill Lounge",
+                "url": "https://youtube.com/watch?v=chill1",
+                "title": "Chill Song 1",
+                "thumbnail": "https://example.com/chill.jpg",
+            }),
             headers=auth_header,
         )
         resp_add = conn.getresponse()
@@ -417,6 +422,7 @@ class TestWebServer(unittest.TestCase):
         data_single = json.loads(resp_single.read().decode("utf-8"))
         self.assertEqual(data_single["playlist"]["name"], "Chill Lounge")
         self.assertEqual(data_single["playlist"]["track_count"], 1)
+        self.assertEqual(data_single["playlist"]["tracks"][0]["thumbnail"], "https://example.com/chill.jpg")
 
         # 5. Rename playlist
         conn.request(

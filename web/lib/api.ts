@@ -177,13 +177,14 @@ export async function deletePlaylist(name: string): Promise<boolean> {
 export async function addTrackToPlaylist(
   playlist: string,
   url: string,
-  title: string = ""
+  title: string = "",
+  thumbnail?: string
 ): Promise<{ success: boolean; already_exists?: boolean; message?: string; track?: any }> {
   try {
     const res = await fetch("/api/playlist/add", {
       method: "POST",
       headers: getHeaders(),
-      body: JSON.stringify({ playlist, url, title }),
+      body: JSON.stringify({ playlist, url, title, thumbnail }),
     });
     if (!res.ok) return { success: false, message: `Request failed with status ${res.status}` };
     const data = await res.json();

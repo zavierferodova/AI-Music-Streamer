@@ -26,7 +26,7 @@ import {
   Lock,
 } from "lucide-react";
 import { ServerStatus, Track } from "@/types";
-import { formatTrackDisplay } from "@/lib/utils";
+import { formatTrackDisplay, getThumbnailFromUrl } from "@/lib/utils";
 import { ConfirmationModal } from "./ConfirmationModal";
 
 interface PlaybackListProps {
@@ -306,17 +306,20 @@ export function PlaybackList({
                     </span>
 
                     {/* Thumbnail */}
-                    {playingTrack.track.thumbnail ? (
-                      <img
-                        src={playingTrack.track.thumbnail}
-                        alt={formatTrackDisplay(playingTrack.track.title, playingTrack.track.url).title}
-                        className="w-11 h-11 rounded-xl object-cover shrink-0 border border-emerald-500/30"
-                      />
-                    ) : (
-                      <div className="w-11 h-11 rounded-xl bg-emerald-900/40 flex items-center justify-center text-emerald-400 shrink-0 border border-emerald-500/30">
-                        <Music2 className="w-5 h-5" />
-                      </div>
-                    )}
+                    {(() => {
+                      const playingThumb = playingTrack.track.thumbnail || getThumbnailFromUrl(playingTrack.track.url);
+                      return playingThumb ? (
+                        <img
+                          src={playingThumb}
+                          alt={formatTrackDisplay(playingTrack.track.title, playingTrack.track.url).title}
+                          className="w-11 h-11 rounded-xl object-cover shrink-0 border border-emerald-500/30"
+                        />
+                      ) : (
+                        <div className="w-11 h-11 rounded-xl bg-emerald-900/40 flex items-center justify-center text-emerald-400 shrink-0 border border-emerald-500/30">
+                          <Music2 className="w-5 h-5" />
+                        </div>
+                      );
+                    })()}
 
                     {/* Title & Info */}
                     <div className="min-w-0">
@@ -341,13 +344,14 @@ export function PlaybackList({
                         <span>Replay</span>
                       </button>
                       <button
-                        onClick={() =>
+                        onClick={() => {
+                          const playingThumb = playingTrack.track.thumbnail || getThumbnailFromUrl(playingTrack.track.url);
                           onSaveToPlaylist(
                             playingTrack.track.url,
                             playingTrack.track.title,
-                            playingTrack.track.thumbnail || undefined
-                          )
-                        }
+                            playingThumb || undefined
+                          );
+                        }}
                         className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
                         title="Save to Playlist"
                       >
@@ -394,7 +398,7 @@ export function PlaybackList({
               ) : (
                 queuedTracks.map(({ track, globalIndex, queueIndex = 0 }) => {
                   const display = formatTrackDisplay(track.title, track.url);
-                  const thumb = track.thumbnail;
+                  const thumb = track.thumbnail || getThumbnailFromUrl(track.url);
                   const isNext = queueIndex === 0;
                   const isBeingDragged = draggedQueueIndex === queueIndex;
                   const isTargetOver = dragOverQueueIndex === queueIndex && draggedQueueIndex !== queueIndex;
@@ -557,7 +561,7 @@ export function PlaybackList({
                   <div className="space-y-1.5 opacity-80 hover:opacity-100 transition-opacity">
                     {playedTracks.map(({ track, globalIndex }) => {
                       const display = formatTrackDisplay(track.title, track.url);
-                      const thumb = track.thumbnail;
+                      const thumb = track.thumbnail || getThumbnailFromUrl(track.url);
 
                       return (
                         <div

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { BookmarkPlus, X, Search, PlusCircle, Music2, Radio, CheckCircle2 } from "lucide-react";
 import { Playlist } from "@/types";
 import { addTrackToPlaylist, createPlaylist } from "@/lib/api";
-import { formatTrackDisplay, matchesSearchQuery } from "@/lib/utils";
+import { formatTrackDisplay, getThumbnailFromUrl, matchesSearchQuery } from "@/lib/utils";
 import { useToast } from "@/hooks/useToast";
 
 interface SaveToPlaylistModalProps {
@@ -37,6 +37,7 @@ export function SaveToPlaylistModal({
   if (!isOpen || !trackData) return null;
 
   const display = formatTrackDisplay(trackData.title, trackData.url);
+  const thumb = trackData.thumbnail || getThumbnailFromUrl(trackData.url);
   const filteredPlaylists = searchFilter
     ? playlists.filter((p) => matchesSearchQuery(p.name, searchFilter))
     : playlists;
@@ -54,7 +55,7 @@ export function SaveToPlaylistModal({
         await createPlaylist(targetName);
       }
 
-      const result = await addTrackToPlaylist(targetName, trackData.url, trackData.title);
+      const result = await addTrackToPlaylist(targetName, trackData.url, trackData.title, thumb || undefined);
       if (result.success) {
         if (result.already_exists) {
           showToast(`Track "${display.title}" already exists in playlist "${targetName}"`, "warning");
@@ -99,9 +100,9 @@ export function SaveToPlaylistModal({
         <div className="p-6 space-y-4">
           {/* Track Preview Card */}
           <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-800/50 border border-slate-700/60">
-            {trackData.thumbnail ? (
+            {thumb ? (
               <img
-                src={trackData.thumbnail}
+                src={thumb}
                 alt={display.title}
                 className="w-11 h-11 rounded-xl object-cover shrink-0 border border-slate-700"
               />
