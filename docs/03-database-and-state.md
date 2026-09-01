@@ -250,3 +250,23 @@ stateDiagram-v2
 - **History Preservation**: Tracks already marked as `'played'` remain untouched in the history list.
 - **Unplayed Randomization**: Only tracks with status `'queued'` have their `sort_order` shuffled using the Fisher-Yates algorithm.
 - **Cycle Reset**: When all tracks reach `'played'` status with `loop=repeat`, `reset_track_history()` resets all statuses back to `'queued'` and triggers a fresh randomized cycle.
+
+---
+
+## 6. Playback Queue Reordering & Dynamic Replay State Lifecycle
+
+### 6.1 State Boundaries & Immutability Rules
+1. **Played History (`status = 'played'`)**:
+   - Represents completed tracks.
+   - Strictly immutable: cannot be dragged, moved, or reordered.
+2. **Currently Playing (`status = 'playing'`)**:
+   - Locked to the active live audio decoder.
+3. **Upcoming Queue (`status = 'queued'`)**:
+   - Fully reorderable via drag-and-drop or Move Up/Down controls.
+
+### 6.2 Dynamic Replay Order Shifting
+When an earlier track from history or the queue is triggered for playback:
+1. **Record Previous Track**: Any actively broadcasting song is transitioned to `'played'` and receives a timestamp in `played_at`.
+2. **Shift Target Track**: The selected track transitions to `'playing'` and is shifted in `sort_order` to immediately follow the played history slice.
+3. **Queue Preservation**: Remaining unplayed tracks maintain their relative order after the target track:
+   $$\text{Track Order} = [\text{Played}_1, \dots, \text{Played}_M] + [\text{Target}_{\text{playing}}] + [\text{Queued}_1, \dots, \text{Queued}_K]$$

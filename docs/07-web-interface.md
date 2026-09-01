@@ -79,6 +79,16 @@ web/
 │   └── ToastNotification.tsx    # Floating notification alerts
 ```
 
+### 3.1 `PlaybackList` Section Architecture
+The playback list is organized into three distinct operational sections:
+1. **Now Broadcasting**: Elevated glow card with live radio animation, track details, restart replay, and playlist actions.
+2. **Upcoming Queue (Reorderable)**:
+   - Drag-and-drop handles (`GripVertical`) and `▲ / ▼` (Move Up / Move Down) buttons.
+   - Reordering is active only on upcoming items; top item cannot move up (`NEXT UP`), bottom item cannot move down.
+3. **Played History (Locked & Non-Reorderable)**:
+   - Completed track history with `🔒 locked` indicator and collapsible toggle.
+   - `draggable={false}`: no drag handles or move buttons. Replay button shifts track back into active broadcast.
+
 ---
 
 ## 4. Custom React Hooks

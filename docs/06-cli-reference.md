@@ -167,14 +167,20 @@ Manages the ephemeral playback list, queued tracks, and fair shuffle cycles.
 | `list [--json]` | Lists all tracks (Played, Now Playing, Upcoming). |
 | `add "<QUERY_OR_URL>"` | Searches and appends first result to queue (deduplicated). |
 | `add-url "<URL>" "<TITLE>"` | Appends explicit URL and Title to queue. |
-| `move <FROM_N> <TO_N>` | Moves track from 1-based index `FROM_N` to `TO_N`. |
-| `reorder <N1> <N2> ...` | Reorders active tracklist by 1-based index sequence or track IDs. |
+| `move <FROM|TITLE> <TO|top|next|bottom>` | Moves a queued track by 1-based index or title to destination. |
+| `play-next <N|TITLE|URL>` | Moves specified track to play immediately next in queue. |
+| `reorder <N1> <N2> ...` | Reorders active queue by 1-based index sequence or track IDs. |
 | `shuffle` | Shuffles upcoming unplayed tracks (preserves played history). |
 | `remove <INDEX_OR_ID>` | Removes track at specified 1-based index or ID. |
-| `play <INDEX_OR_ID>` | Immediately interrupts and jumps to track. |
+| `play <INDEX_OR_ID>` | Shifts track to active position and marks previous song as played. |
 | `next` | Skips current track and plays next in queue. |
 | `reset-history` | Resets all played tracks back to queued status for replay. |
 | `clear` | Clears all tracks from the queue. |
+
+### Replay & Reordering Invariant Rules
+- **Locked Played History**: Tracks with `status == 'played'` are immutable history items and cannot be moved or reordered.
+- **Dynamic Replay Shifting**: When replaying an earlier track, the actively streaming song is marked as `played`, and the selected track shifts to the `playing` position immediately following the played history.
+- **Queue Protection**: Moves targeting positions before played tracks are automatically clamped to the top of the upcoming queue (`NEXT UP`).
 
 ---
 
