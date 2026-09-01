@@ -5,8 +5,13 @@ import { ServerStatus, LoopMode, BroadcastMode, PlaylistOrderMode } from "@/type
 import { wsClient, ConnectionState } from "@/lib/ws";
 import { fetchServerStatus } from "@/lib/api";
 import { useToast } from "./useToast";
+import type { StreamEngineMode } from "./useAudioStream";
 
-export function useStreamStatus() {
+/** Delay (ms) applied to now_playing metadata when using the direct_mp3 engine mode,
+ *  compensating for MP3 encoder + browser audio element buffering latency. */
+const MP3_METADATA_DELAY_MS = 1500;
+
+export function useStreamStatus(engineMode?: StreamEngineMode) {
   const { showToast } = useToast();
   const [status, setStatus] = useState<ServerStatus | null>(null);
   const [connectionState, setConnectionState] = useState<ConnectionState>("connecting");
@@ -18,6 +23,12 @@ export function useStreamStatus() {
   const volumeDebounceTimerRef = useRef<any>(null);
   const [isSpeakerConfirmOpen, setIsSpeakerConfirmOpen] = useState<boolean>(false);
 
+  // Metadata delay compensation for direct_mp3 mode
+  const engineModeRef = useRef<StreamEngineMode | undefined>(engineMode);
+  engineModeRef.current = engineMode;
+  const metadataDelayTimerRef = useRef<any>(null);
+  const lastNowPlayingKeyRef = useRef<string>("");
+
   const startLoading = useCallback(() => {
     setGlobalLoadingCount((c) => c + 1);
   }, []);
@@ -26,11 +37,19 @@ export function useStreamStatus() {
     setGlobalLoadingCount((c) => Math.max(0, c - 1));
   }, []);
 
+  // Clean up pending metadata delay timer on unmount
+  useEffect(() => {
+    return () => {
+      if (metadataDelayTimerRef.current) {
+        clearTimeout(metadataDelayTimerRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     wsClient.connect();
 
     const unsubStatus = wsClient.subscribeStatus((newStatus) => {
-      setStatus(newStatus);
       if (newStatus.volume !== undefined && typeof newStatus.volume === "number") {
         setVolume(newStatus.volume);
       }
@@ -42,6 +61,39 @@ export function useStreamStatus() {
           lastErrorTimestampRef.current = errTime;
           showToast(`Playback error: ${newStatus.last_error.message}`, "error", "error_outline");
         }
+      }
+
+      // Metadata delay compensation: when using direct_mp3 engine, delay now_playing
+      // updates so the displayed track title/thumbnail syncs with the actual audio
+      // heard through the HTTP MP3 stream (which has ~1-2s encoding/buffering latency).
+      const nowPlayingKey = `${newStatus.now_playing?.url || ""}|${newStatus.now_playing?.title || ""}`;
+      const trackChanged = nowPlayingKey !== lastNowPlayingKeyRef.current;
+
+      if (engineModeRef.current === "direct_mp3" && trackChanged && lastNowPlayingKeyRef.current !== "") {
+        // Track changed while in direct_mp3 mode — apply metadata with delay
+        lastNowPlayingKeyRef.current = nowPlayingKey;
+
+        // Immediately apply everything except now_playing (keep controls responsive)
+        setStatus((prev) => {
+          if (!prev) return newStatus;
+          return { ...newStatus, now_playing: prev.now_playing };
+        });
+
+        // Schedule delayed now_playing update
+        if (metadataDelayTimerRef.current) {
+          clearTimeout(metadataDelayTimerRef.current);
+        }
+        metadataDelayTimerRef.current = setTimeout(() => {
+          setStatus((prev) => {
+            if (!prev) return newStatus;
+            return { ...prev, now_playing: newStatus.now_playing };
+          });
+          metadataDelayTimerRef.current = null;
+        }, MP3_METADATA_DELAY_MS);
+      } else {
+        // No delay needed: webaudio mode, first status, or same track
+        lastNowPlayingKeyRef.current = nowPlayingKey;
+        setStatus(newStatus);
       }
     });
 
@@ -69,6 +121,7 @@ export function useStreamStatus() {
       wsClient.disconnect();
     };
   }, [showToast]);
+
 
   const sendCommand = useCallback((payload: Record<string, any>) => {
     wsClient.sendCommand(payload);

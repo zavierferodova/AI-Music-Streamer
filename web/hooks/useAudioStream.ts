@@ -16,6 +16,8 @@ export interface AudioStreamOptions {
   } | null;
   playbackState?: string;
   isAdmin?: boolean;
+  engineMode?: StreamEngineMode;
+  setEngineMode?: (mode: StreamEngineMode) => void;
   onTogglePlayPause?: () => void;
   onPlayPrevious?: () => void;
   onSkipTrack?: () => void;
@@ -32,12 +34,15 @@ export function useAudioStream(options?: AudioStreamOptions) {
   const gainNodeRef = useRef<GainNode | null>(null);
   const nextPlayTimeRef = useRef<number>(0);
   const isPlayingRef = useRef<boolean>(false);
-  const engineModeRef = useRef<StreamEngineMode>("webaudio");
+  const engineModeRef = useRef<StreamEngineMode>(options?.engineMode || "webaudio");
 
   const keepaliveAudioRef = useRef<HTMLAudioElement | null>(null);
   const directMp3AudioRef = useRef<HTMLAudioElement | null>(null);
 
-  const [engineMode, setEngineModeState] = useState<StreamEngineMode>("webaudio");
+  // Use externally-controlled engine mode if provided, otherwise manage internally
+  const [internalEngineMode, setInternalEngineModeState] = useState<StreamEngineMode>("webaudio");
+  const engineMode = options?.engineMode ?? internalEngineMode;
+  const setEngineModeState = options?.setEngineMode ?? setInternalEngineModeState;
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -48,6 +53,11 @@ export function useAudioStream(options?: AudioStreamOptions) {
 
   const optionsRef = useRef(options);
   optionsRef.current = options;
+
+  // Keep engineModeRef in sync with the derived engineMode (external or internal)
+  useEffect(() => {
+    engineModeRef.current = engineMode;
+  }, [engineMode]);
 
   // Initialize or get the AudioContext singleton
   const getOrCreateAudioContext = useCallback(() => {

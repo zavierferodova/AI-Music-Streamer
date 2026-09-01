@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useStreamStatus } from "@/hooks/useStreamStatus";
 import { useAuth } from "@/hooks/useAuth";
+import type { StreamEngineMode } from "@/hooks/useAudioStream";
 import { TopProgressBar } from "@/components/TopProgressBar";
 import { ConnectionBanner } from "@/components/ConnectionBanner";
 import { Header } from "@/components/Header";
@@ -19,6 +20,9 @@ import { SecurityOtpModal } from "@/components/SecurityOtpModal";
 import { ConfirmationModal } from "@/components/ConfirmationModal";
 
 export default function Home() {
+  // Lift engine mode state to page level for metadata delay coordination
+  const [engineMode, setEngineMode] = useState<StreamEngineMode>("webaudio");
+
   const {
     status,
     connectionState,
@@ -53,7 +57,7 @@ export default function Home() {
     retryServerConnection,
     refreshStatus,
     sendCommand,
-  } = useStreamStatus();
+  } = useStreamStatus(engineMode);
 
   const {
     isSecurityEnabled,
@@ -185,6 +189,8 @@ export default function Home() {
         <StreamPlayer
           status={status}
           isAdmin={isAdmin}
+          engineMode={engineMode}
+          setEngineMode={setEngineMode}
           onTogglePlayPause={togglePlayPause}
           onPlayPrevious={playPreviousTrack}
           onSkipTrack={skipTrack}

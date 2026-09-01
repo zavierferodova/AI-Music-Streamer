@@ -61,6 +61,8 @@ function getLatencyStyle(latencyMs: number, engineMode: StreamEngineMode): Laten
 export interface StreamPlayerProps {
   status?: ServerStatus | null;
   isAdmin?: boolean;
+  engineMode?: StreamEngineMode;
+  setEngineMode?: (mode: StreamEngineMode) => void;
   onTogglePlayPause?: () => void;
   onPlayPrevious?: () => void;
   onSkipTrack?: () => void;
@@ -70,6 +72,8 @@ export interface StreamPlayerProps {
 export function StreamPlayer({
   status,
   isAdmin = false,
+  engineMode: externalEngineMode,
+  setEngineMode: externalSetEngineMode,
   onTogglePlayPause,
   onPlayPrevious,
   onSkipTrack,
@@ -92,6 +96,8 @@ export function StreamPlayer({
     nowPlaying: status?.now_playing,
     playbackState: status?.state,
     isAdmin,
+    engineMode: externalEngineMode,
+    setEngineMode: externalSetEngineMode,
     onTogglePlayPause,
     onPlayPrevious,
     onSkipTrack,

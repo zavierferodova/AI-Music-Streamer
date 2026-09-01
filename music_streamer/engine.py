@@ -215,6 +215,10 @@ class AudioEngine:
                 "-hide_banner",
                 "-loglevel",
                 "error",
+                "-probesize",
+                "0",
+                "-analyzeduration",
+                "0",
                 "-fflags",
                 "nobuffer",
                 "-flags",
@@ -231,6 +235,8 @@ class AudioEngine:
                 "libmp3lame",
                 "-b:a",
                 "128k",
+                "-reservoir",
+                "0",
                 "-flush_packets",
                 "1",
                 "-muxdelay",
@@ -249,7 +255,7 @@ class AudioEngine:
                 )
 
                 while self.running and self.encoder_proc.poll() is None:
-                    chunk = self.encoder_proc.stdout.read(4096)
+                    chunk = self.encoder_proc.stdout.read(1152)
                     if not chunk:
                         break
                     self.broadcaster.broadcast(chunk)
