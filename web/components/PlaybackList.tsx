@@ -407,7 +407,7 @@ export function PlaybackList({
                       onDragOver={(e) => handleDragOver(e, queueIndex)}
                       onDrop={(e) => handleDrop(e, queueIndex)}
                       onDragEnd={handleDragEnd}
-                      className={`group flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-2xl border transition-all ${
+                      className={`group flex items-center justify-between gap-2.5 p-2.5 sm:p-3 rounded-2xl border transition-all ${
                         isBeingDragged
                           ? "opacity-40 scale-[0.98] border-dashed border-sky-500 bg-sky-950/40"
                           : isTargetOver
@@ -417,10 +417,10 @@ export function PlaybackList({
                           : "bg-slate-800/40 hover:bg-slate-800/80 border-slate-700/40"
                       }`}
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
                         {/* Reorder Controls (Admin only on queued items) */}
                         {isAdmin && (
-                          <div className="flex items-center gap-1 shrink-0">
+                          <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
                             {/* Drag Handle */}
                             <div
                               className="p-1 rounded-lg text-slate-500 group-hover:text-slate-300 hover:text-sky-400 cursor-grab active:cursor-grabbing transition-colors"
@@ -461,14 +461,14 @@ export function PlaybackList({
 
                         {/* Queue Position Badge */}
                         <span
-                          className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold shrink-0 ${
+                          className={`flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-lg text-[10px] font-semibold shrink-0 ${
                             isNext
                               ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
                               : "bg-slate-800 text-slate-400 border border-slate-700"
                           }`}
                         >
                           <Clock className="w-3 h-3" />
-                          <span>{isNext ? "NEXT UP" : `#${queueIndex + 1}`}</span>
+                          <span>{isNext ? "NEXT" : `#${queueIndex + 1}`}</span>
                         </span>
 
                         {/* Thumbnail Preview */}
@@ -476,16 +476,16 @@ export function PlaybackList({
                           <img
                             src={thumb}
                             alt={display.title}
-                            className="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-700"
+                            className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover shrink-0 border border-slate-700"
                           />
                         ) : (
-                          <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 shrink-0 border border-slate-700">
+                          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 shrink-0 border border-slate-700">
                             <Music2 className="w-4 h-4" />
                           </div>
                         )}
 
                         {/* Title & Info */}
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="text-xs font-semibold text-white truncate">{display.title}</div>
                           <div className="text-[10px] text-slate-400 truncate mt-0.5">
                             {display.url || "Audio track"}
@@ -495,14 +495,14 @@ export function PlaybackList({
 
                       {/* Track Actions */}
                       {isAdmin ? (
-                        <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+                        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
                           <button
                             onClick={() => onPlayTrack(globalIndex)}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 text-xs font-semibold border border-sky-500/40 transition-all hover:scale-105"
+                            className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 text-xs font-semibold border border-sky-500/40 transition-all hover:scale-105"
                             title="Play immediately"
                           >
                             <Play className="w-3.5 h-3.5 fill-sky-300" />
-                            <span>Play Now</span>
+                            <span className="hidden sm:inline">Play Now</span>
                           </button>
                           <button
                             onClick={() => onSaveToPlaylist(track.url, track.title, thumb || undefined)}
@@ -520,7 +520,7 @@ export function PlaybackList({
                           </button>
                         </div>
                       ) : (
-                        <div className="text-[11px] text-slate-500 font-medium self-end sm:self-center">
+                        <div className="text-[11px] text-slate-500 font-medium shrink-0">
                           Queued
                         </div>
                       )}
@@ -563,13 +563,13 @@ export function PlaybackList({
                         <div
                           key={track.id || globalIndex}
                           draggable={false}
-                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2.5 rounded-2xl border bg-slate-900/40 border-slate-800/80 transition-all"
+                          className="flex items-center justify-between gap-2.5 p-2.5 rounded-2xl border bg-slate-900/40 border-slate-800/80 transition-all"
                         >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            {/* Played Status Badge (No Drag Handles, No Move Buttons) */}
-                            <span className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-800 text-slate-400 text-[10px] font-medium shrink-0">
+                          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
+                            {/* Played Status Badge */}
+                            <span className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-lg bg-slate-800 text-slate-400 text-[10px] font-medium shrink-0">
                               <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                              <span>PLAYED</span>
+                              <span className="hidden xs:inline">PLAYED</span>
                             </span>
 
                             {/* Thumbnail Preview */}
@@ -586,7 +586,7 @@ export function PlaybackList({
                             )}
 
                             {/* Title & Info */}
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                               <div className="text-xs font-medium text-slate-300 truncate">{display.title}</div>
                               <div className="text-[10px] text-slate-500 truncate mt-0.5">
                                 {display.url || "Played track"}
@@ -596,32 +596,32 @@ export function PlaybackList({
 
                           {/* Played Track Actions */}
                           {isAdmin ? (
-                            <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+                            <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
                               <button
                                 onClick={() => onPlayTrack(globalIndex)}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium border border-slate-700 transition-all"
+                                className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium border border-slate-700 transition-all"
                                 title="Replay track"
                               >
                                 <RotateCw className="w-3 h-3" />
-                                <span>Replay</span>
+                                <span className="hidden sm:inline">Replay</span>
                               </button>
                               <button
                                 onClick={() => onSaveToPlaylist(track.url, track.title, thumb || undefined)}
-                                className="p-1 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
                                 title="Save to Playlist"
                               >
                                 <BookmarkPlus className="w-3.5 h-3.5" />
                               </button>
                               <button
                                 onClick={() => setTrackToDelete({ index: globalIndex, title: display.title })}
-                                className="p-1 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                                className="p-1.5 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
                                 title="Remove from list"
                               >
                                 <X className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           ) : (
-                            <div className="text-[10px] text-slate-500 font-medium self-end sm:self-center">
+                            <div className="text-[10px] text-slate-500 font-medium shrink-0">
                               Completed
                             </div>
                           )}
