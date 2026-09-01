@@ -64,6 +64,39 @@ def send_ws_text(target, text: str, masked: bool = False):
             target.flush()
 
 
+def send_ws_binary(target, data: bytes, masked: bool = False):
+    """Encodes and sends a binary frame (Opcode 0x2) per RFC 6455 for ultra-low latency PCM streaming."""
+    if not isinstance(data, (bytes, bytearray)):
+        data = bytes(data)
+    length = len(data)
+    header = bytearray([0x82])  # FIN + Opcode 2 (Binary)
+    mask_bit = 0x80 if masked else 0x00
+
+    if length < 126:
+        header.append(length | mask_bit)
+    elif length <= 65535:
+        header.append(126 | mask_bit)
+        header.extend(length.to_bytes(2, byteorder="big"))
+    else:
+        header.append(127 | mask_bit)
+        header.extend(length.to_bytes(8, byteorder="big"))
+
+    if masked:
+        mask_key = os.urandom(4)
+        header.extend(mask_key)
+        masked_payload = bytes(b ^ mask_key[i % 4] for i, b in enumerate(data))
+        data_to_send = bytes(header) + masked_payload
+    else:
+        data_to_send = bytes(header) + data
+
+    if hasattr(target, "sendall"):
+        target.sendall(data_to_send)
+    elif hasattr(target, "write"):
+        target.write(data_to_send)
+        if hasattr(target, "flush"):
+            target.flush()
+
+
 def read_ws_frame(rfile):
     """Reads and unmasks an incoming WebSocket frame from client per RFC 6455."""
     b1 = rfile.read(1)
@@ -168,11 +201,11 @@ def build_server_status(
 
 
 class WebSocketHub:
-    """Manages active WebSocket connections and broadcasts role-tailored real-time updates."""
+    """Manages active WebSocket connections and broadcasts role-tailored real-time updates and sub-100ms binary audio stream."""
 
     def __init__(self, server):
         self.server = server
-        self.clients = {}  # wfile -> {"host_header": host_header, "role": role}
+        self.clients = {}  # wfile -> {"host_header": host_header, "role": role, "audio_subscribed": bool}
         self.lock = threading.Lock()
         self.running = True
         self._ticker_thread = threading.Thread(target=self._ticker_loop, daemon=True)
@@ -180,7 +213,7 @@ class WebSocketHub:
 
     def register(self, wfile, host_header="localhost:8000", role="admin"):
         with self.lock:
-            self.clients[wfile] = {"host_header": host_header, "role": role}
+            self.clients[wfile] = {"host_header": host_header, "role": role, "audio_subscribed": False}
         print(f"[WebSocketHub] Client connected (Role: {role}, Active WS listeners: {len(self.clients)})")
         try:
             status_json = json.dumps(
@@ -205,6 +238,32 @@ class WebSocketHub:
         with self.lock:
             info = self.clients.get(wfile)
             return info["role"] if info else "subscriber"
+
+    def set_audio_subscription(self, wfile, subscribed: bool):
+        with self.lock:
+            if wfile in self.clients:
+                self.clients[wfile]["audio_subscribed"] = subscribed
+                print(f"[WebSocketHub] Audio stream {'subscribed' if subscribed else 'unsubscribed'} for WS client")
+
+    def broadcast_audio_chunk(self, raw_pcm: bytes):
+        """Broadcasts 50ms raw PCM audio chunk as RFC 6455 binary frame to subscribed WebSocket clients."""
+        if not raw_pcm:
+            return
+        dead = []
+        with self.lock:
+            for wfile, info in list(self.clients.items()):
+                if info.get("audio_subscribed"):
+                    # Check OTP security permissions if enabled
+                    if self.server.security.is_enabled():
+                        role = info.get("role")
+                        if role not in ["admin", "subscriber"]:
+                            continue
+                    try:
+                        send_ws_binary(wfile, raw_pcm)
+                    except Exception:
+                        dead.append(wfile)
+            for d in dead:
+                self.clients.pop(d, None)
 
     def broadcast(self):
         """Pushes the latest status to every connected WebSocket client tailored by role."""
@@ -551,6 +610,19 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
                 if ok:
                     self.server.ws_hub.update_role(self.wfile, role)
                     self.server.ws_hub.broadcast()
+            return
+
+        if action in ["subscribe_audio", "audio_subscribe"]:
+            # Audio streaming is permitted for authenticated subscribers and admins
+            if sec.is_enabled():
+                client_role = self.server.ws_hub.get_role(self.wfile)
+                if client_role not in ["admin", "subscriber"]:
+                    return
+            self.server.ws_hub.set_audio_subscription(self.wfile, True)
+            return
+
+        if action in ["unsubscribe_audio", "audio_unsubscribe"]:
+            self.server.ws_hub.set_audio_subscription(self.wfile, False)
             return
 
         # Playback control & playlist actions via WebSocket require admin role
@@ -980,6 +1052,7 @@ class ThreadedStreamServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
         self.start_time = time.time()
         self.ws_hub = WebSocketHub(self)
         self.engine.on_state_change = lambda: self.ws_hub.broadcast()
+        self.engine.on_audio_chunk = self.ws_hub.broadcast_audio_chunk
         super().__init__(server_address, RequestHandlerClass)
 
 

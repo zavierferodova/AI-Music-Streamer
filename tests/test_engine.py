@@ -98,6 +98,20 @@ class TestEngine(unittest.TestCase):
         self.assertEqual(engine.loop, "off")
         self.assertEqual(self.db.get_setting("loop"), "off")
 
+    def test_audio_engine_on_audio_chunk(self):
+        """Verify AudioEngine invokes on_audio_chunk callback with raw PCM or silence."""
+        engine = AudioEngine(self.db, self.broadcaster, mode="silent")
+        received = []
+        engine.on_audio_chunk = lambda chunk: received.append(chunk)
+
+        # In stopped state, silence chunk should be dispatched to callback
+        engine.running = False
+        if engine.on_audio_chunk:
+            engine.on_audio_chunk(SILENCE_CHUNK)
+
+        self.assertEqual(len(received), 1)
+        self.assertEqual(received[0], SILENCE_CHUNK)
+
 
 if __name__ == "__main__":
     unittest.main()

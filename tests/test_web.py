@@ -439,6 +439,50 @@ class TestWebServer(unittest.TestCase):
         # Close websocket cleanly
         s.close()
 
+    def test_websocket_audio_streaming_subscription(self):
+        """Verify WebSocket client can subscribe to audio and receive binary audio chunks."""
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect(("127.0.0.1", self.port))
+
+        sec_key = "dGhlIHNhbXBsZSBub25jZQ=="
+        req = (
+            f"GET /ws HTTP/1.1\r\n"
+            f"Host: 127.0.0.1:{self.port}\r\n"
+            f"Upgrade: websocket\r\n"
+            f"Connection: Upgrade\r\n"
+            f"Sec-WebSocket-Key: {sec_key}\r\n"
+            f"Sec-WebSocket-Version: 13\r\n\r\n"
+        )
+        s.sendall(req.encode("utf-8"))
+
+        handshake_resp = s.recv(1024).decode("utf-8")
+        self.assertIn("101 Switching Protocols", handshake_resp)
+
+        rfile = s.makefile("rb")
+        # Read initial status frame
+        opcode, _ = read_ws_frame(rfile)
+        self.assertEqual(opcode, 0x1)
+
+        # Send masked subscribe_audio command from client
+        send_ws_text(s, json.dumps({"action": "subscribe_audio"}), masked=True)
+        time.sleep(0.1)
+
+        # Broadcast test binary chunk
+        test_pcm = b"\x00\x05\x00\x05" * 100
+        self.server.ws_hub.broadcast_audio_chunk(test_pcm)
+
+        # Read until binary frame (skipping any interim ticker status frames)
+        received_binary = False
+        for _ in range(5):
+            opcode, payload = read_ws_frame(rfile)
+            if opcode == 0x2:
+                received_binary = True
+                self.assertEqual(payload, test_pcm)
+                break
+        self.assertTrue(received_binary)
+
+        s.close()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -88,6 +88,54 @@ class TestIPCAndServer(unittest.TestCase):
         self.assertIn("now_playing", status)
         self.assertEqual(status["stream_url"], "http://localhost:8000/stream.mp3")
 
+    def test_websocket_binary_frame_encode_decode(self):
+        """Verify WebSocket binary frame encoding (Opcode 0x2) for PCM chunks."""
+        from music_streamer.server import send_ws_binary
+        test_pcm = b"\x01\x02\x03\x04" * 100
+        buf = io.BytesIO()
+        send_ws_binary(buf, test_pcm)
+        buf.seek(0)
+
+        # Decode unmasked server binary frame
+        b1 = buf.read(1)
+        self.assertEqual(b1[0] & 0x0F, 0x2)  # Opcode 2 (Binary)
+        b2 = buf.read(1)
+        length = b2[0] & 0x7F
+        if length == 126:
+            data2 = buf.read(2)
+            length = int.from_bytes(data2, byteorder="big")
+        content = buf.read(length)
+        self.assertEqual(content, test_pcm)
+
+    def test_websocket_hub_audio_broadcast(self):
+        """Verify WebSocketHub broadcasts binary PCM audio chunks only to subscribed clients."""
+        from music_streamer.server import WebSocketHub
+        from unittest.mock import MagicMock
+        hub = WebSocketHub.__new__(WebSocketHub)
+        mock_sec = MagicMock()
+        mock_sec.is_enabled.return_value = False
+        hub.server = type("MockServer", (), {"security": mock_sec})()
+        hub.clients = {}
+        hub.lock = threading.Lock()
+        hub.running = False
+
+        buf1 = io.BytesIO()
+        buf2 = io.BytesIO()
+        hub.clients[buf1] = {"host_header": "localhost:8000", "role": "admin", "audio_subscribed": True}
+        hub.clients[buf2] = {"host_header": "localhost:8000", "role": "admin", "audio_subscribed": False}
+
+        test_chunk = b"\x10\x20\x30\x40" * 50
+        hub.broadcast_audio_chunk(test_chunk)
+
+        # Subscribed client received binary frame
+        buf1.seek(0)
+        b1 = buf1.read(1)
+        self.assertEqual(b1[0] & 0x0F, 0x2)
+
+        # Unsubscribed client received nothing
+        buf2.seek(0)
+        self.assertEqual(buf2.read(), b"")
+
 
 if __name__ == "__main__":
     unittest.main()

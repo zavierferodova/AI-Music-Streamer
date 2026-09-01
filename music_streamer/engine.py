@@ -126,6 +126,8 @@ class AudioEngine:
 
         # State change callback for WebSocket hub
         self.on_state_change: Optional[Callable[[], None]] = None
+        # Real-time raw PCM callback for Web Audio API WebSocket streaming (<100ms lockstep)
+        self.on_audio_chunk: Optional[Callable[[bytes], None]] = None
 
         # Background threads
         self.encoder_thread = threading.Thread(target=self._run_encoder_pipeline, daemon=True)
@@ -584,6 +586,13 @@ class AudioEngine:
                             except Exception:
                                 pass
 
+                        # Feed real-time Web Audio API WebSocket subscribers (<100ms lockstep)
+                        if self.on_audio_chunk:
+                            try:
+                                self.on_audio_chunk(raw_pcm)
+                            except Exception:
+                                pass
+
                         # Feed local ALSA sink if in speaker mode
                         if self.mode == "speaker":
                             self._feed_alsa(raw_pcm)
@@ -666,6 +675,12 @@ class AudioEngine:
             if self.encoder_proc and self.encoder_proc.stdin:
                 try:
                     self.encoder_proc.stdin.write(SILENCE_CHUNK)
+                except Exception:
+                    pass
+
+            if self.on_audio_chunk:
+                try:
+                    self.on_audio_chunk(SILENCE_CHUNK)
                 except Exception:
                     pass
 

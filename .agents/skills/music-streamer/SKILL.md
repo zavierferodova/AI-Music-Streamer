@@ -13,14 +13,16 @@ metadata:
 
 Control local music playback and 24/7 continuous HTTP MP3 live audio streaming on this Ubuntu server via the `~/music-streamer/` Python suite backed by an SQLite database.
 All audio is decoded from YouTube (or SoundCloud/Bandcamp) via `yt-dlp` → `ffmpeg` and concurrently fed to:
-1. **Continuous HTTP Live Stream (Default)** broadcasted at `http://<SERVER_IP>:8000/stream.mp3` (always on in default `silent` mode)
-2. **Server Speaker (ALSA)** on device `default` (when explicitly switched to `speaker` mode)
+1. **Real-Time WebSocket Web Audio Stream (Sub-100ms Sync)** broadcasted via `/ws` directly to browser `AudioContext`
+2. **Continuous HTTP MP3 Stream** broadcasted at `http://<SERVER_IP>:8000/stream.mp3` (for VLC, mpv, and legacy players)
+3. **Server Speaker (ALSA)** on device `default` (when explicitly switched to `speaker` mode)
 
 ### Key Features
+- **True Sub-100ms Real-Time Sync**: Direct raw PCM (44.1 kHz, 16-bit stereo) streamed over WebSocket (`/ws`) directly into browser `AudioContext` scheduled time, achieving < 50–100ms lockstep delay matching the server speaker without HTML5 `<audio>` 2–3s buffer delay.
 - **Default Silent Broadcast Mode**: By default, the server runs in `silent` mode (HTTP stream broadcast only, keeping server hardware speaker silent).
 - **24/7 Always-On Live Stream**: HTTP clients stay connected continuously. When music is stopped, paused, or transitioning between songs, the server broadcasts real-time comfort silence at 128 kbps (44.1 kHz stereo).
 - **Zero-Downtime Dynamic Mode Switching**: Switch between `silent` (default) and `speaker` mode on the fly via Web UI or CLI (`./stream.py speaker` / `./stream.py silent`) without restarting the server or interrupting listeners.
-- **Exact Server-Client Synchronization**: When in `speaker` mode, audio heard on the server speaker and audio broadcast to connected clients are fed simultaneously from the same PCM buffer.
+- **Exact Server-Client Synchronization**: When in `speaker` mode, audio heard on the server speaker, Web Audio WebSocket clients, and MP3 stream clients are fed simultaneously from the same PCM buffer.
 - **SQLite Database Persistence & Deduplication**: Robust transactional state store (`runtime/music_streamer.db` in `WAL` mode) for tracks, fair shuffle cycle state, volume, loop, named playlists, and security settings with strict track deduplication.
 - **Real-Time Web Panel & Loading UX**: Glassmorphic UI with top progress bar, skeleton placeholders, audio buffering indicators, playback error diagnostics with Retry/Skip actions, and WebSocket live updates.
 - **Multi-Client Broadcast**: Multiple listeners/devices can connect simultaneously with minimal latency.

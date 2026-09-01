@@ -4,14 +4,17 @@ import { postApiFallback } from "./api";
 export type ConnectionState = "connecting" | "connected" | "reconnecting" | "disconnected";
 export type StatusListener = (status: ServerStatus) => void;
 export type ConnectionListener = (state: ConnectionState, message?: string) => void;
+export type AudioChunkListener = (chunk: ArrayBuffer) => void;
 
 class WebSocketClient {
   private ws: WebSocket | null = null;
   private reconnectTimer: any = null;
   private statusListeners: Set<StatusListener> = new Set();
   private connectionListeners: Set<ConnectionListener> = new Set();
+  private audioChunkListeners: Set<AudioChunkListener> = new Set();
   private currentState: ConnectionState = "disconnected";
   private isIntentionallyClosed = false;
+  private isAudioSubscribed = false;
 
   public connect() {
     if (typeof window === "undefined") return;
@@ -28,17 +31,25 @@ class WebSocketClient {
 
     try {
       this.ws = new WebSocket(wsUrl);
+      this.ws.binaryType = "arraybuffer";
 
       this.ws.onopen = () => {
         this.setConnectionState("connected", "Connected (Realtime WS)");
+        if (this.isAudioSubscribed) {
+          this.sendCommand({ action: "subscribe_audio" });
+        }
       };
 
       this.ws.onmessage = (event) => {
-        try {
-          const data: ServerStatus = JSON.parse(event.data);
-          this.notifyStatus(data);
-        } catch (err) {
-          console.error("[WebSocket] Parse error:", err);
+        if (typeof event.data === "string") {
+          try {
+            const data: ServerStatus = JSON.parse(event.data);
+            this.notifyStatus(data);
+          } catch (err) {
+            console.error("[WebSocket] Parse error:", err);
+          }
+        } else if (event.data instanceof ArrayBuffer) {
+          this.notifyAudioChunk(event.data);
         }
       };
 
@@ -88,6 +99,16 @@ class WebSocketClient {
     }
   }
 
+  public subscribeAudioStream() {
+    this.isAudioSubscribed = true;
+    this.sendCommand({ action: "subscribe_audio" });
+  }
+
+  public unsubscribeAudioStream() {
+    this.isAudioSubscribed = false;
+    this.sendCommand({ action: "unsubscribe_audio" });
+  }
+
   public subscribeStatus(listener: StatusListener): () => void {
     this.statusListeners.add(listener);
     return () => {
@@ -103,6 +124,13 @@ class WebSocketClient {
     };
   }
 
+  public subscribeAudioChunk(listener: AudioChunkListener): () => void {
+    this.audioChunkListeners.add(listener);
+    return () => {
+      this.audioChunkListeners.delete(listener);
+    };
+  }
+
   public getConnectionState(): ConnectionState {
     return this.currentState;
   }
@@ -114,6 +142,10 @@ class WebSocketClient {
 
   private notifyStatus(status: ServerStatus) {
     this.statusListeners.forEach((l) => l(status));
+  }
+
+  private notifyAudioChunk(chunk: ArrayBuffer) {
+    this.audioChunkListeners.forEach((l) => l(chunk));
   }
 
   private scheduleReconnect() {
