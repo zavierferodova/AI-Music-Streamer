@@ -322,12 +322,12 @@ class AudioEngine:
     def _start_decoder(self, url: str, start_seconds: float = 0.0) -> subprocess.Popen:
         """Start decoding pipeline: yt-dlp piped into ffmpeg outputting raw PCM with optional seek offset."""
         log_path = str(PLAYER_LOG_FILE)
-        ss_flag = f"-ss {start_seconds} " if start_seconds > 0 else ""
+        section_flag = f'--download-sections "*{int(start_seconds)}-inf" ' if start_seconds > 0 else ""
         shell_cmd = (
             f"yt-dlp -q --no-warnings --no-update --js-runtimes 'node:{NODE_BIN}' "
             f"--remote-components ejs:github --extractor-args 'youtube:player_client=mweb' "
-            f"-f '18/bestaudio/best' --no-playlist -o - '{url}' 2>>'{log_path}' "
-            f"| ffmpeg -hide_banner -loglevel error {ss_flag}-fflags +genpts -i pipe:0 {ss_flag}-vn -f s16le -ar {SAMPLE_RATE} -ac {CHANNELS} pipe:1 2>>'{log_path}'"
+            f"{section_flag}-f '18/bestaudio/best' --no-playlist -o - '{url}' 2>>'{log_path}' "
+            f"| ffmpeg -hide_banner -loglevel error -i pipe:0 -vn -f s16le -ar {SAMPLE_RATE} -ac {CHANNELS} pipe:1 2>>'{log_path}'"
         )
         self.elapsed_offset = float(start_seconds)
         self.track_start_time = None
