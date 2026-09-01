@@ -812,6 +812,212 @@ class PlaybackManager:
 
         return False
 
+    def reorder_bulk(self, sequence: List[Any]) -> Dict[str, Any]:
+        """
+        Reorders playback tracks in bulk based on a sequence of references.
+        References can be 1-based indices, track IDs, URLs, or title substrings/names.
+        Supports:
+          - Full queue reordering: specify all track references in new sequence.
+          - Partial queue reordering: specified tracks are placed at the front of the upcoming queue in given order;
+            unspecified queued tracks follow in their current relative order.
+        Played history is preserved intact.
+        """
+        tracks = self.db.get_tracks()
+        if not tracks:
+            return {"status": "ok", "reordered_count": 0, "tracks": []}
+        if not sequence:
+            return {"status": "ok", "reordered_count": 0, "tracks": tracks}
+
+        # Check if sequence is a list of numeric indices covering all tracks
+        try:
+            seq_ints = [int(x) for x in sequence]
+            if len(seq_ints) == len(tracks) and sorted(seq_ints) == list(range(1, len(tracks) + 1)):
+                reordered_ids = [tracks[i - 1]["id"] for i in seq_ints]
+                self.db.reorder_tracks(reordered_ids)
+                return {"status": "ok", "reordered_count": len(tracks), "tracks": self.db.get_tracks()}
+            elif len(seq_ints) == len(tracks) and sorted(seq_ints) == list(range(len(tracks))):
+                reordered_ids = [tracks[i]["id"] for i in seq_ints]
+                self.db.reorder_tracks(reordered_ids)
+                return {"status": "ok", "reordered_count": len(tracks), "tracks": self.db.get_tracks()}
+        except (ValueError, TypeError):
+            pass
+
+        # Resolve items in sequence to unique track objects
+        resolved_tracks = []
+        used_ids = set()
+
+        for item in sequence:
+            if isinstance(item, dict):
+                ref = item.get("id") or item.get("url") or item.get("title") or item.get("index")
+            else:
+                ref = item
+
+            if ref is None:
+                continue
+
+            idx = self._find_index_in_tracks(tracks, ref)
+            if idx is not None:
+                candidate = tracks[idx]
+                if candidate["id"] not in used_ids:
+                    resolved_tracks.append(candidate)
+                    used_ids.add(candidate["id"])
+
+        if not resolved_tracks:
+            return {"status": "error", "message": "No matching tracks found for reorder sequence", "tracks": tracks}
+
+        # Construct new full sequence
+        if len(resolved_tracks) == len(tracks):
+            reordered_ids = [t["id"] for t in resolved_tracks]
+        else:
+            played_ids = [t["id"] for t in tracks if t.get("status") == "played" and t["id"] not in used_ids]
+            playing_ids = [t["id"] for t in tracks if t.get("status") == "playing" and t["id"] not in used_ids]
+            resolved_ids = [t["id"] for t in resolved_tracks]
+            remaining_queued = [t["id"] for t in tracks if t.get("status") == "queued" and t["id"] not in used_ids]
+            reordered_ids = played_ids + playing_ids + resolved_ids + remaining_queued
+
+        self.db.reorder_tracks(reordered_ids)
+        return {
+            "status": "ok",
+            "reordered_count": len(resolved_tracks),
+            "tracks": self.db.get_tracks(),
+        }
+
+    def move_bulk(
+        self,
+        items: List[Any],
+        order: Optional[str] = None,
+        after: Optional[Any] = None,
+        before: Optional[Any] = None,
+        position: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Moves multiple tracks together as a contiguous batch to a target position:
+          - order='next' / 'top': Moves batch immediately after playing track.
+          - order='last' / 'bottom': Moves batch to the end of the queue.
+          - after=<target>: Moves batch immediately following target track.
+          - before=<target>: Moves batch immediately preceding target track.
+          - position=<N>: Moves batch starting at 1-based position N.
+        Played history tracks are locked and cannot be moved.
+        """
+        tracks = self.db.get_tracks()
+        if not tracks or not items:
+            return {"status": "error", "message": "No tracks or items provided", "tracks": tracks}
+
+        # Resolve items to movable track IDs
+        move_tracks = []
+        used_ids = set()
+        for it in items:
+            if isinstance(it, dict):
+                ref = it.get("id") or it.get("url") or it.get("title") or it.get("index")
+            else:
+                ref = it
+            idx = self._find_index_in_tracks(tracks, ref)
+            if idx is not None:
+                cand = tracks[idx]
+                if cand["id"] not in used_ids and cand.get("status") != "played":
+                    move_tracks.append(cand)
+                    used_ids.add(cand["id"])
+
+        if not move_tracks:
+            return {"status": "error", "message": "No movable queued tracks found in items list", "tracks": tracks}
+
+        move_ids = [t["id"] for t in move_tracks]
+        remaining_tracks = [t for t in tracks if t["id"] not in used_ids]
+
+        if not remaining_tracks:
+            return {"status": "ok", "moved_count": len(move_ids), "tracks": tracks}
+
+        # Resolve target position
+        order_type = None
+        target_spec = None
+
+        if after is not None:
+            order_type = "after"
+            target_spec = after
+        elif before is not None:
+            order_type = "before"
+            target_spec = before
+        elif position is not None:
+            if isinstance(position, str):
+                pos_lower = position.strip().lower()
+                if pos_lower in ["next", "top", "first", "next-up"]:
+                    order_type = "next"
+                elif pos_lower in ["last", "bottom", "end"]:
+                    order_type = "last"
+                elif pos_lower.isdigit():
+                    order_type = "position"
+                    target_spec = int(pos_lower)
+                else:
+                    order_type = "position"
+                    target_spec = position
+            else:
+                order_type = "position"
+                target_spec = int(position)
+        elif order is not None:
+            order_str = str(order).strip()
+            order_lower = order_str.lower()
+            if order_lower in ["next", "top", "first", "next-up"]:
+                order_type = "next"
+            elif order_lower in ["last", "bottom", "end"]:
+                order_type = "last"
+            elif order_lower.startswith("after:") or order_lower.startswith("after "):
+                order_type = "after"
+                target_spec = order_str[5:].strip().lstrip(":").strip()
+            elif order_lower.startswith("before:") or order_lower.startswith("before "):
+                order_type = "before"
+                target_spec = order_str[6:].strip().lstrip(":").strip()
+            elif order_lower.startswith("pos:") or order_lower.startswith("position:"):
+                order_type = "position"
+                target_spec = order_str.split(":", 1)[1].strip()
+            elif order_lower.isdigit():
+                order_type = "position"
+                target_spec = int(order_lower)
+            else:
+                order_type = "position"
+                target_spec = order_str
+        else:
+            order_type = "next"
+
+        to_idx = len(remaining_tracks)
+        if order_type == "next":
+            playing_idx = next((i for i, t in enumerate(remaining_tracks) if t.get("status") == "playing"), None)
+            if playing_idx is not None:
+                to_idx = playing_idx + 1
+            else:
+                first_unplayed = next((i for i, t in enumerate(remaining_tracks) if t.get("status") != "played"), 0)
+                to_idx = first_unplayed
+
+        elif order_type == "after":
+            ref_idx = self._find_index_in_tracks(remaining_tracks, target_spec)
+            to_idx = ref_idx + 1 if ref_idx is not None else len(remaining_tracks)
+
+        elif order_type == "before":
+            ref_idx = self._find_index_in_tracks(remaining_tracks, target_spec)
+            to_idx = ref_idx if ref_idx is not None else 0
+
+        elif order_type == "position":
+            if isinstance(target_spec, str) and target_spec.isdigit():
+                target_spec = int(target_spec)
+            if isinstance(target_spec, int):
+                to_idx = max(0, min(len(remaining_tracks), target_spec - 1))
+            else:
+                ref_idx = self._find_index_in_tracks(remaining_tracks, target_spec)
+                to_idx = ref_idx if ref_idx is not None else len(remaining_tracks)
+
+        first_unplayed = next((i for i, t in enumerate(remaining_tracks) if t.get("status") != "played"), 0)
+        if to_idx < first_unplayed:
+            to_idx = first_unplayed
+
+        to_idx = max(0, min(len(remaining_tracks), to_idx))
+        new_order_ids = [t["id"] for t in remaining_tracks[:to_idx]] + move_ids + [t["id"] for t in remaining_tracks[to_idx:]]
+        self.db.reorder_tracks(new_order_ids)
+
+        return {
+            "status": "ok",
+            "moved_count": len(move_ids),
+            "tracks": self.db.get_tracks(),
+        }
+
     def reorder_by_indices(self, new_order: List[int]) -> bool:
         """
         Reorders playback tracks according to a list of 0-based indices.

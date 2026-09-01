@@ -10,8 +10,11 @@ Usage:
   ./playback.py add <URL|query> [next|last|after <target>|before <target>|<N>]
   ./playback.py list [--json]
   ./playback.py move <FROM_N|TITLE> <TO_N|top|next|bottom>
+  ./playback.py move-bulk <ITEM1> <ITEM2> ... [--next|--after <target>|--position <N>]
   ./playback.py play-next <N|TITLE|URL>
-  ./playback.py reorder <N1> <N2> ...
+  ./playback.py reorder <N1|TITLE1> <N2|TITLE2> ...
+  ./playback.py reorder --file <sequence.txt|sequence.json>
+  ./playback.py reorder -  # Read reorder sequence from stdin
   ./playback.py shuffle
   ./playback.py next
   ./playback.py prev

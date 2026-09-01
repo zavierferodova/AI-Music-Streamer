@@ -165,13 +165,26 @@ Moves a track from `from_index` to `to_index` (0-based) in the playback list.
 }
 ```
 
-#### `POST /api/playback/reorder`
-Reorders the active playback list by custom track ID list or index permutation.
+#### `POST /api/playback/move_bulk`
+Moves multiple tracks as a contiguous batch to a new position.
 
 **Request Payload:**
 ```json
 {
-  "track_ids": ["1725178200000_3", "1725178200000_1", "1725178200000_2"]
+  "items": ["Song 4", "Song 5"],
+  "order": "next",
+  "after": "Song 1",
+  "position": 2
+}
+```
+
+#### `POST /api/playback/reorder` (or `/api/playback/reorder_bulk`)
+Reorders the active playback list by custom sequence (indices, titles, or track IDs). Supports full or partial sequences.
+
+**Request Payload:**
+```json
+{
+  "sequence": ["Wirang", "Faded", "Song 3"]
 }
 ```
 

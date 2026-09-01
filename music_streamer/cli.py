@@ -234,7 +234,10 @@ def build_playback_parser() -> argparse.ArgumentParser:
             "show",
             "move",
             "mv",
+            "move-bulk",
+            "mv-bulk",
             "reorder",
+            "reorder-bulk",
             "play-next",
             "next-up",
             "shuffle",
@@ -835,35 +838,154 @@ def handle_playback(args: argparse.Namespace) -> int:
             print(f"Error: Invalid track move from #{from_idx + 1} to #{to_idx + 1}", file=sys.stderr)
             return 1
 
-    elif cmd == "reorder":
-        if not targets:
-            print("Usage: playback.py reorder <N1> <N2> <N3> ... (e.g. playback.py reorder 3 1 2 4)", file=sys.stderr)
+    elif cmd in ["move-bulk", "mv-bulk"]:
+        rem_targets, order_kwargs = extract_playback_order(args, targets)
+        items_to_move: List[Any] = []
+
+        # 1. From file if specified
+        file_path = getattr(args, "file", None)
+        if file_path:
+            p = Path(file_path).expanduser().resolve()
+            if not p.exists():
+                print(f"Error: File not found: {file_path}", file=sys.stderr)
+                return 1
+            content = p.read_text(encoding="utf-8").strip()
+            if content.startswith("[") and content.endswith("]"):
+                try:
+                    parsed = json.loads(content)
+                    if isinstance(parsed, list):
+                        items_to_move.extend(parsed)
+                except Exception:
+                    for line in content.splitlines():
+                        if line.strip() and not line.strip().startswith("#"):
+                            items_to_move.append(line.strip())
+            else:
+                for line in content.splitlines():
+                    if line.strip() and not line.strip().startswith("#"):
+                        items_to_move.append(line.strip())
+
+        # 2. From stdin if target is '-'
+        if rem_targets and rem_targets[0] == "-":
+            stdin_content = sys.stdin.read().strip()
+            if stdin_content.startswith("[") and stdin_content.endswith("]"):
+                try:
+                    parsed = json.loads(stdin_content)
+                    if isinstance(parsed, list):
+                        items_to_move.extend(parsed)
+                except Exception:
+                    for line in stdin_content.splitlines():
+                        if line.strip() and not line.strip().startswith("#"):
+                            items_to_move.append(line.strip())
+            else:
+                for line in stdin_content.splitlines():
+                    if line.strip() and not line.strip().startswith("#"):
+                        items_to_move.append(line.strip())
+
+        # 3. From CLI positional targets
+        elif rem_targets:
+            joined = " ".join(rem_targets)
+            if joined.startswith("[") and joined.endswith("]"):
+                try:
+                    parsed = json.loads(joined)
+                    if isinstance(parsed, list):
+                        items_to_move.extend(parsed)
+                except Exception:
+                    items_to_move.extend(rem_targets)
+            else:
+                items_to_move.extend(rem_targets)
+
+        if not items_to_move:
+            print("Usage: playback.py move-bulk <ITEM1> <ITEM2> ... [--next|--after <target>|--position <N>]", file=sys.stderr)
             return 1
 
-        raw_items = []
-        for t in targets:
-            for piece in str(t).split(","):
-                p = piece.strip()
-                if p:
-                    raw_items.append(p)
-
-        if all(x.isdigit() for x in raw_items):
-            indices_0 = [int(x) - 1 for x in raw_items]
-            if playback_mgr.reorder_by_indices(indices_0):
-                print(f"✓ Reordered playback list: {', '.join(raw_items)}")
-                send_ipc_command({"action": "playback_update"})
-                return 0
-            else:
-                print(f"Error: Invalid index permutation: {raw_items}", file=sys.stderr)
-                return 1
+        res = playback_mgr.move_bulk(items_to_move, **order_kwargs)
+        if res.get("status") == "ok":
+            print(f"✓ Bulk moved {res.get('moved_count', 0)} track(s)")
+            send_ipc_command({"action": "playback_update"})
+            if args.json:
+                print(json.dumps(res, indent=2, ensure_ascii=False))
+            return 0
         else:
-            if playback_mgr.reorder_tracks(raw_items):
-                print(f"✓ Reordered playback list by IDs ({len(raw_items)} tracks)")
-                send_ipc_command({"action": "playback_update"})
-                return 0
-            else:
-                print("Error: Invalid track ID list for reordering", file=sys.stderr)
+            print(f"Error: {res.get('message', 'Bulk move failed')}", file=sys.stderr)
+            return 1
+
+    elif cmd in ["reorder", "reorder-bulk"]:
+        items_to_reorder: List[Any] = []
+
+        # 1. From file if specified
+        file_path = getattr(args, "file", None)
+        if file_path:
+            p = Path(file_path).expanduser().resolve()
+            if not p.exists():
+                print(f"Error: File not found: {file_path}", file=sys.stderr)
                 return 1
+            content = p.read_text(encoding="utf-8").strip()
+            if content.startswith("[") and content.endswith("]"):
+                try:
+                    parsed = json.loads(content)
+                    if isinstance(parsed, list):
+                        items_to_reorder.extend(parsed)
+                except Exception:
+                    for line in content.splitlines():
+                        if line.strip() and not line.strip().startswith("#"):
+                            items_to_reorder.append(line.strip())
+            else:
+                for line in content.splitlines():
+                    if line.strip() and not line.strip().startswith("#"):
+                        items_to_reorder.append(line.strip())
+
+        # 2. From stdin if target is '-'
+        if targets and targets[0] == "-":
+            stdin_content = sys.stdin.read().strip()
+            if stdin_content.startswith("[") and stdin_content.endswith("]"):
+                try:
+                    parsed = json.loads(stdin_content)
+                    if isinstance(parsed, list):
+                        items_to_reorder.extend(parsed)
+                except Exception:
+                    for line in stdin_content.splitlines():
+                        if line.strip() and not line.strip().startswith("#"):
+                            items_to_reorder.append(line.strip())
+            else:
+                for line in stdin_content.splitlines():
+                    if line.strip() and not line.strip().startswith("#"):
+                        items_to_reorder.append(line.strip())
+
+        # 3. From CLI positional targets
+        elif targets:
+            joined = " ".join(targets)
+            if joined.startswith("[") and joined.endswith("]"):
+                try:
+                    parsed = json.loads(joined)
+                    if isinstance(parsed, list):
+                        items_to_reorder.extend(parsed)
+                except Exception:
+                    for t in targets:
+                        for piece in str(t).split(","):
+                            p = piece.strip()
+                            if p:
+                                items_to_reorder.append(p)
+            else:
+                for t in targets:
+                    for piece in str(t).split(","):
+                        p = piece.strip()
+                        if p:
+                            items_to_reorder.append(p)
+
+        if not items_to_reorder:
+            print("Usage: playback.py reorder <ITEM1> <ITEM2> ... (e.g. playback.py reorder 3 1 2 4, or track titles)", file=sys.stderr)
+            return 1
+
+        res = playback_mgr.reorder_bulk(items_to_reorder)
+        if res.get("status") == "ok":
+            print(f"✓ Reordered playback list ({res.get('reordered_count', 0)} tracks updated)")
+            send_ipc_command({"action": "playback_update"})
+            if args.json:
+                print(json.dumps(res, indent=2, ensure_ascii=False))
+            return 0
+        else:
+            print(f"Error: {res.get('message', 'Reordering failed')}", file=sys.stderr)
+            return 1
 
     elif cmd == "shuffle":
         mode = playback_mgr.shuffle_unplayed_tracks()

@@ -86,9 +86,18 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(args_mv.command, "mv")
         self.assertEqual(args_mv.target, ["2", "3"])
 
+        args_move_bulk = parser.parse_args(["move-bulk", "Song 1", "Song 2", "--next"])
+        self.assertEqual(args_move_bulk.command, "move-bulk")
+        self.assertEqual(args_move_bulk.target, ["Song 1", "Song 2"])
+        self.assertTrue(args_move_bulk.next)
+
         args_reorder = parser.parse_args(["reorder", "3", "1", "2", "4"])
         self.assertEqual(args_reorder.command, "reorder")
         self.assertEqual(args_reorder.target, ["3", "1", "2", "4"])
+
+        args_reorder_bulk = parser.parse_args(["reorder-bulk", "--file", "order.txt"])
+        self.assertEqual(args_reorder_bulk.command, "reorder-bulk")
+        self.assertEqual(args_reorder_bulk.file, "order.txt")
 
     def test_volume_parser(self):
         """Verify volume CLI arguments."""

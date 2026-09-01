@@ -230,8 +230,14 @@ If the user provides an explicit direct URL (e.g., `https://www.youtube.com/watc
 cat tracks.txt | ~/music-streamer/playback.py add-bulk - # Bulk add from piped stdin
 ~/music-streamer/playback.py move 4 1          # Move 4th track to 1st position (1-indexed)
 ~/music-streamer/playback.py move "FANCY" top  # Move track by name to top of queue
+~/music-streamer/playback.py move-bulk "Song 3" "Song 4" --next # Move multiple tracks to play next
+~/music-streamer/playback.py move-bulk "Song 3" "Song 4" --after "Wirang" # Move multiple tracks after target
+~/music-streamer/playback.py move-bulk 4 5 top # Move tracks 4 and 5 to top of upcoming queue
 ~/music-streamer/playback.py play-next "FANCY" # Move track to play immediately next
-~/music-streamer/playback.py reorder 3 1 2 4   # Reorder entire queue to custom sequence
+~/music-streamer/playback.py reorder 3 1 2 4   # Reorder entire queue to custom sequence (1-indexed)
+~/music-streamer/playback.py reorder "Wirang" "Faded" "Song 3" # Reorder using track names
+~/music-streamer/playback.py reorder --file /path/to/order.txt # Reorder from sequence file
+cat order.txt | ~/music-streamer/playback.py reorder - # Reorder from piped stdin
 ~/music-streamer/playback.py shuffle           # Randomize unplayed tracks (preserves played history)
 ~/music-streamer/playback.py remove 2          # Remove 2nd track from list
 ~/music-streamer/playback.py reset-history     # Reset played tracks to unplayed for fresh replay

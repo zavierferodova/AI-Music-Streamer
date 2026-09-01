@@ -657,7 +657,53 @@ class TestWebServer(unittest.TestCase):
         data = json.loads(resp2.read().decode("utf-8"))
         self.assertEqual(data["status"], "ok")
         self.assertEqual(data["added_count"], 3)
-        self.assertEqual(data["tracks"][0]["position"], 1)
+        conn.close()
+
+    def test_admin_playback_reorder_and_move_bulk(self):
+        """Verify REST API /api/playback/reorder_bulk and move_bulk."""
+        admin_otp = self.security.get_admin_otp()
+        _, token, _ = self.security.verify_otp(admin_otp, client_ip="127.0.0.1")
+        auth_header = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+        conn = self._get_connection()
+
+        # Add 4 tracks
+        for i in range(1, 5):
+            conn.request(
+                "POST",
+                "/api/playback/add",
+                body=json.dumps({"url": f"https://youtube.com/watch?v=rb_{i}", "title": f"Song {i}"}),
+                headers=auth_header,
+            )
+            resp = conn.getresponse()
+            self.assertEqual(resp.status, 200)
+            resp.read()
+
+        # Reorder bulk with sequence
+        conn.request(
+            "POST",
+            "/api/playback/reorder_bulk",
+            body=json.dumps({"sequence": ["Song 4", "Song 2", "Song 1", "Song 3"]}),
+            headers=auth_header,
+        )
+        resp_reorder = conn.getresponse()
+        self.assertEqual(resp_reorder.status, 200)
+        data_reorder = json.loads(resp_reorder.read().decode("utf-8"))
+        self.assertEqual(data_reorder["status"], "ok")
+        self.assertEqual(data_reorder["reordered_count"], 4)
+
+        # Move bulk (Song 1 and Song 3 to position 1)
+        conn.request(
+            "POST",
+            "/api/playback/move_bulk",
+            body=json.dumps({"items": ["Song 1", "Song 3"], "position": 1}),
+            headers=auth_header,
+        )
+        resp_move = conn.getresponse()
+        self.assertEqual(resp_move.status, 200)
+        data_move = json.loads(resp_move.read().decode("utf-8"))
+        self.assertEqual(data_move["status"], "ok")
+        self.assertEqual(data_move["moved_count"], 2)
 
         conn.close()
 

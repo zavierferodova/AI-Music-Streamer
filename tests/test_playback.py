@@ -506,6 +506,53 @@ class TestPlaybackManager(unittest.TestCase):
         titles2 = [t["title"] for t in state2["tracks"]]
         self.assertEqual(titles2, ["Initial 1", "Next Batch 1", "Next Batch 2", "Initial 2", "After Batch 1", "After Batch 2"])
 
+    def test_reorder_bulk_full_and_partial(self):
+        """Verify reorder_bulk with full track sequences, titles, and partial subsets."""
+        self.playback.add_track("https://youtube.com/watch?v=s1", "Song A")
+        self.playback.add_track("https://youtube.com/watch?v=s2", "Song B")
+        self.playback.add_track("https://youtube.com/watch?v=s3", "Song C")
+        self.playback.add_track("https://youtube.com/watch?v=s4", "Song D")
+
+        # Reorder using 1-based indices
+        res = self.playback.reorder_bulk([4, 2, 1, 3])
+        self.assertEqual(res["status"], "ok")
+        self.assertEqual(res["reordered_count"], 4)
+        titles = [t["title"] for t in self.playback.get_state()["tracks"]]
+        self.assertEqual(titles, ["Song D", "Song B", "Song A", "Song C"])
+
+        # Reorder using title names
+        res2 = self.playback.reorder_bulk(["Song A", "Song D", "Song C", "Song B"])
+        self.assertEqual(res2["status"], "ok")
+        titles2 = [t["title"] for t in self.playback.get_state()["tracks"]]
+        self.assertEqual(titles2, ["Song A", "Song D", "Song C", "Song B"])
+
+        # Partial reorder: prioritize Song C, Song B to front
+        res3 = self.playback.reorder_bulk(["Song C", "Song B"])
+        self.assertEqual(res3["status"], "ok")
+        titles3 = [t["title"] for t in self.playback.get_state()["tracks"]]
+        self.assertEqual(titles3, ["Song C", "Song B", "Song A", "Song D"])
+
+    def test_move_bulk_batch_positions(self):
+        """Verify move_bulk moves multiple tracks together as a batch."""
+        self.playback.add_track("https://youtube.com/watch?v=m1", "Track 1")
+        self.playback.add_track("https://youtube.com/watch?v=m2", "Track 2")
+        self.playback.add_track("https://youtube.com/watch?v=m3", "Track 3")
+        self.playback.add_track("https://youtube.com/watch?v=m4", "Track 4")
+        self.playback.mark_playing_url("https://youtube.com/watch?v=m1", "Track 1")
+
+        # Move Track 3 and Track 4 to play NEXT (after playing Track 1)
+        res = self.playback.move_bulk(["Track 3", "Track 4"], order="next")
+        self.assertEqual(res["status"], "ok")
+        self.assertEqual(res["moved_count"], 2)
+        titles = [t["title"] for t in self.playback.get_state()["tracks"]]
+        self.assertEqual(titles, ["Track 1", "Track 3", "Track 4", "Track 2"])
+
+        # Move Track 3 and Track 4 to the bottom / last
+        res2 = self.playback.move_bulk(["Track 3", "Track 4"], order="last")
+        self.assertEqual(res2["status"], "ok")
+        titles2 = [t["title"] for t in self.playback.get_state()["tracks"]]
+        self.assertEqual(titles2, ["Track 1", "Track 2", "Track 3", "Track 4"])
+
 
 if __name__ == "__main__":
     unittest.main()
