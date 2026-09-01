@@ -161,10 +161,12 @@ def build_server_status(
     client_cnt = broadcaster.client_count() if broadcaster else 0
 
     elapsed = 0
-    if engine and engine.track_start_time and state in ["playing", "paused"]:
-        if state == "playing":
+    if engine and state in ["playing", "paused"]:
+        if getattr(engine, "is_buffering", False) or getattr(engine, "chunks_played", 0) == 0 or engine.track_start_time is None:
+            elapsed = max(0, int(getattr(engine, "elapsed_offset", 0)))
+        elif state == "playing" and engine.track_start_time:
             elapsed = max(0, int(time.time() - engine.track_start_time))
-        elif state == "paused" and getattr(engine, "paused_time", None):
+        elif state == "paused" and getattr(engine, "paused_time", None) and engine.track_start_time:
             elapsed = max(0, int(engine.paused_time - engine.track_start_time))
         else:
             elapsed = max(0, int(getattr(engine, "elapsed_offset", 0)))

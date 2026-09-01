@@ -330,7 +330,7 @@ class AudioEngine:
             f"| ffmpeg -hide_banner -loglevel error {ss_flag}-fflags +genpts -i pipe:0 {ss_flag}-vn -f s16le -ar {SAMPLE_RATE} -ac {CHANNELS} pipe:1 2>>'{log_path}'"
         )
         self.elapsed_offset = float(start_seconds)
-        self.track_start_time = time.time() - self.elapsed_offset
+        self.track_start_time = None
         self.paused_time = None
         self.is_buffering = True
         self.chunks_played = 0
@@ -672,6 +672,10 @@ class AudioEngine:
                 raw_pcm = self.decoder_proc.stdout.read(CHUNK_BYTES)
 
                 if raw_pcm:
+                    if self.chunks_played == 0:
+                        self.is_buffering = False
+                        self.track_start_time = time.time() - self.elapsed_offset
+                        self._sync_runtime_state()
                     self.is_buffering = False
                     self.chunks_played += 1
                     if len(raw_pcm) == CHUNK_BYTES:

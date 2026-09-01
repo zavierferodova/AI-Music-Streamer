@@ -91,7 +91,7 @@ export function NowPlayingHero({
   }, [serverElapsed]);
 
   useEffect(() => {
-    if (!isPlaying) {
+    if (!isPlaying || isBuffering || !status?.now_playing?.url) {
       setLocalElapsed(serverElapsed);
       return;
     }
@@ -104,7 +104,7 @@ export function NowPlayingHero({
     }, 250);
 
     return () => clearInterval(interval);
-  }, [isPlaying, isScrubbing, duration, serverElapsed]);
+  }, [isPlaying, isBuffering, isScrubbing, duration, serverElapsed, status?.now_playing?.url]);
 
   // Sync scrub value when not dragging
   useEffect(() => {
