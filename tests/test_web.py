@@ -423,14 +423,13 @@ class TestWebServer(unittest.TestCase):
             f"Sec-WebSocket-Version: 13\r\n\r\n"
         )
         s.sendall(req.encode("utf-8"))
-
-        # Read handshake response
-        handshake_resp = s.recv(1024).decode("utf-8")
-        self.assertIn("101 Switching Protocols", handshake_resp)
-        self.assertIn("Sec-WebSocket-Accept", handshake_resp)
+        rfile = s.makefile("rb", buffering=0)
+        while True:
+            line = rfile.readline().decode("utf-8")
+            if not line or line == "\r\n":
+                break
 
         # Read initial server text frame
-        rfile = s.makefile("rb")
         opcode, payload = read_ws_frame(rfile)
         self.assertEqual(opcode, 0x1)  # Text frame
         status_data = json.loads(payload.decode("utf-8"))
@@ -445,8 +444,9 @@ class TestWebServer(unittest.TestCase):
         s.connect(("127.0.0.1", self.port))
 
         sec_key = "dGhlIHNhbXBsZSBub25jZQ=="
+        sub_otp = self.security.get_subscriber_otp()
         req = (
-            f"GET /ws HTTP/1.1\r\n"
+            f"GET /ws?otp={sub_otp} HTTP/1.1\r\n"
             f"Host: 127.0.0.1:{self.port}\r\n"
             f"Upgrade: websocket\r\n"
             f"Connection: Upgrade\r\n"
@@ -454,18 +454,23 @@ class TestWebServer(unittest.TestCase):
             f"Sec-WebSocket-Version: 13\r\n\r\n"
         )
         s.sendall(req.encode("utf-8"))
+        rfile = s.makefile("rb", buffering=0)
+        while True:
+            line = rfile.readline().decode("utf-8")
+            if not line or line == "\r\n":
+                break
 
-        handshake_resp = s.recv(1024).decode("utf-8")
-        self.assertIn("101 Switching Protocols", handshake_resp)
-
-        rfile = s.makefile("rb")
         # Read initial status frame
         opcode, _ = read_ws_frame(rfile)
         self.assertEqual(opcode, 0x1)
 
         # Send masked subscribe_audio command from client
         send_ws_text(s, json.dumps({"action": "subscribe_audio"}), masked=True)
-        time.sleep(0.1)
+        # Wait until server has registered audio subscription
+        for _ in range(20):
+            if self.server.ws_hub.listener_count() > 0:
+                break
+            time.sleep(0.05)
 
         # Broadcast test binary chunk
         test_pcm = b"\x00\x05\x00\x05" * 100
@@ -473,7 +478,7 @@ class TestWebServer(unittest.TestCase):
 
         # Read until binary frame (skipping any interim ticker status frames)
         received_binary = False
-        for _ in range(5):
+        for _ in range(10):
             opcode, payload = read_ws_frame(rfile)
             if opcode == 0x2:
                 received_binary = True

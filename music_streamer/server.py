@@ -99,33 +99,45 @@ def send_ws_binary(target, data: bytes, masked: bool = False):
 
 def read_ws_frame(rfile):
     """Reads and unmasks an incoming WebSocket frame from client per RFC 6455."""
-    b1 = rfile.read(1)
+    def _read_exact(n):
+        buf = bytearray()
+        while len(buf) < n:
+            try:
+                chunk = rfile.read(n - len(buf))
+                if not chunk:
+                    return None
+                buf.extend(chunk)
+            except Exception:
+                return None
+        return bytes(buf)
+
+    b1 = _read_exact(1)
     if not b1:
         return None, None
     opcode = b1[0] & 0x0F
-    b2 = rfile.read(1)
+    b2 = _read_exact(1)
     if not b2:
         return None, None
     masked = (b2[0] & 0x80) != 0
     length = b2[0] & 0x7F
 
     if length == 126:
-        data2 = rfile.read(2)
-        if len(data2) < 2:
+        data2 = _read_exact(2)
+        if not data2:
             return None, None
         length = int.from_bytes(data2, byteorder="big")
     elif length == 127:
-        data8 = rfile.read(8)
-        if len(data8) < 8:
+        data8 = _read_exact(8)
+        if not data8:
             return None, None
         length = int.from_bytes(data8, byteorder="big")
 
-    mask_key = rfile.read(4) if masked else None
-    if masked and (not mask_key or len(mask_key) < 4):
+    mask_key = _read_exact(4) if masked else None
+    if masked and not mask_key:
         return None, None
 
-    payload = rfile.read(length)
-    if len(payload) < length:
+    payload = _read_exact(length) if length > 0 else b""
+    if payload is None:
         return None, None
 
     if masked and mask_key:
@@ -140,6 +152,7 @@ def build_server_status(
     broadcaster: Optional[Broadcaster] = None,
     host_header: str = "localhost:8000",
     role: str = "admin",
+    ws_hub: Optional[Any] = None,
 ) -> dict:
     """
     Builds a complete, unified dictionary of the current playback, stream, and track history state.
@@ -158,7 +171,9 @@ def build_server_status(
         (engine.current_thumbnail if engine else db_inst.get_setting("current_thumbnail", ""))
         or get_thumbnail_for_url(cur_url)
     )
-    client_cnt = broadcaster.client_count() if broadcaster else 0
+    http_cnt = broadcaster.client_count() if broadcaster else 0
+    ws_cnt = ws_hub.listener_count() if ws_hub else 0
+    client_cnt = http_cnt + ws_cnt
 
     elapsed = 0
     if engine and state in ["playing", "paused"]:
@@ -215,10 +230,20 @@ class WebSocketHub:
     def __init__(self, server):
         self.server = server
         self.clients = {}  # wfile -> {"host_header": host_header, "role": role, "audio_subscribed": bool}
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
         self.running = True
         self._ticker_thread = threading.Thread(target=self._ticker_loop, daemon=True)
         self._ticker_thread.start()
+
+    def listener_count(self) -> int:
+        """Returns the number of clients actively subscribed to binary audio streaming."""
+        with self.lock:
+            return sum(1 for info in self.clients.values() if info.get("audio_subscribed"))
+
+    def client_count(self) -> int:
+        """Returns total connected WebSocket clients."""
+        with self.lock:
+            return len(self.clients)
 
     def register(self, wfile, host_header="localhost:8000", role="admin"):
         with self.lock:
@@ -226,7 +251,7 @@ class WebSocketHub:
         print(f"[WebSocketHub] Client connected (Role: {role}, Active WS listeners: {len(self.clients)})")
         try:
             status_json = json.dumps(
-                build_server_status(self.server.db, self.server.engine, self.server.broadcaster, host_header, role=role),
+                build_server_status(self.server.db, self.server.engine, self.server.broadcaster, host_header, role=role, ws_hub=self),
                 ensure_ascii=False,
             )
             send_ws_text(wfile, status_json)
@@ -237,6 +262,7 @@ class WebSocketHub:
         with self.lock:
             self.clients.pop(wfile, None)
         print(f"[WebSocketHub] Client disconnected (Remaining WS listeners: {len(self.clients)})")
+        self.broadcast()
 
     def update_role(self, wfile, role: str):
         with self.lock:
@@ -252,7 +278,9 @@ class WebSocketHub:
         with self.lock:
             if wfile in self.clients:
                 self.clients[wfile]["audio_subscribed"] = subscribed
-                print(f"[WebSocketHub] Audio stream {'subscribed' if subscribed else 'unsubscribed'} for WS client")
+                audio_cnt = sum(1 for i in self.clients.values() if i.get("audio_subscribed"))
+                print(f"[WebSocketHub] Audio stream {'subscribed' if subscribed else 'unsubscribed'} for WS client (Active audio listeners: {audio_cnt})")
+        self.broadcast()
 
     def broadcast_audio_chunk(self, raw_pcm: bytes):
         """Broadcasts 50ms raw PCM audio chunk as RFC 6455 binary frame to subscribed WebSocket clients."""
@@ -287,6 +315,7 @@ class WebSocketHub:
                             self.server.broadcaster,
                             info["host_header"],
                             role=info.get("role", "admin"),
+                            ws_hub=self,
                         ),
                         ensure_ascii=False,
                     )
@@ -368,7 +397,7 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
                 sec: OTPManager = self.server.security
                 caller_role = sec.get_request_role(self) or ("admin" if not sec.is_enabled() else "subscriber")
                 data = build_server_status(
-                    self.server.db, self.server.engine, self.server.broadcaster, host_header, role=caller_role
+                    self.server.db, self.server.engine, self.server.broadcaster, host_header, role=caller_role, ws_hub=self.server.ws_hub
                 )
                 self.wfile.write(json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8"))
             return
