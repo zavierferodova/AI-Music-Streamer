@@ -373,7 +373,7 @@ def build_stop_parser() -> argparse.ArgumentParser:
 
 def build_stream_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Manage continuous HTTP stream server & broadcast station")
-    parser.add_argument("command", nargs="?", choices=["status", "stop", "silent", "speaker", "mode", "public"], help="Action")
+    parser.add_argument("command", nargs="?", choices=["status", "stop", "restart", "silent", "speaker", "mode", "public"], help="Action")
     parser.add_argument("--mode", choices=["silent", "speaker"], default="silent", help="Playback mode")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="Port to listen on")
     parser.add_argument("--url", help="Initial YouTube URL to play immediately")
@@ -1992,6 +1992,14 @@ def handle_stream(args: argparse.Namespace) -> int:
 
     elif cmd == "stop":
         return handle_stop(argparse.Namespace(all=True))
+
+    elif cmd == "restart":
+        print("Stopping running stream server...")
+        handle_stop(argparse.Namespace(all=True))
+        time.sleep(1.5)
+        print("Restarting stream server daemon in background...")
+        args.daemon = True
+        args.command = None
 
     elif cmd in ["silent", "speaker", "mode"]:
         target_mode = cmd
