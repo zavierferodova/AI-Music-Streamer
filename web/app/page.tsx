@@ -16,6 +16,7 @@ import { PlaybackList } from "@/components/PlaybackList";
 import { PlaylistExplorer } from "@/components/PlaylistExplorer";
 import { SaveToPlaylistModal } from "@/components/SaveToPlaylistModal";
 import { SecurityOtpModal } from "@/components/SecurityOtpModal";
+import { ConfirmationModal } from "@/components/ConfirmationModal";
 
 export default function Home() {
   const {
@@ -30,6 +31,9 @@ export default function Home() {
     stopMusic,
     toggleLoop,
     toggleMode,
+    isSpeakerConfirmOpen,
+    setIsSpeakerConfirmOpen,
+    confirmSpeakerMode,
     togglePlaybackMode,
     resetPlaybackHistory,
     clearPlaybackList,
@@ -248,6 +252,18 @@ export default function Home() {
         onSubmitOtp={submitCode}
         error={authError}
         loading={authLoading}
+      />
+
+      {/* Speaker Sync Mode Confirmation Dialog */}
+      <ConfirmationModal
+        isOpen={isSpeakerConfirmOpen}
+        title="Switch to Speaker Sync Mode?"
+        message="This will unmute the server speaker and output audio out loud in sync with the live stream broadcast."
+        confirmLabel="Enable Speaker"
+        cancelLabel="Keep Silent"
+        variant="speaker"
+        onConfirm={confirmSpeakerMode}
+        onClose={() => setIsSpeakerConfirmOpen(false)}
       />
     </div>
   );

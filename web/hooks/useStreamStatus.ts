@@ -16,6 +16,7 @@ export function useStreamStatus() {
   const [globalLoadingCount, setGlobalLoadingCount] = useState<number>(0);
   const lastErrorTimestampRef = useRef<number | null>(null);
   const volumeDebounceTimerRef = useRef<any>(null);
+  const [isSpeakerConfirmOpen, setIsSpeakerConfirmOpen] = useState<boolean>(false);
 
   const startLoading = useCallback(() => {
     setGlobalLoadingCount((c) => c + 1);
@@ -127,19 +128,18 @@ export function useStreamStatus() {
   const toggleMode = useCallback(() => {
     if (!status) return;
     if (status.mode === "silent") {
-      if (
-        window.confirm(
-          "Switch to Speaker Sync Mode?\n\nThis will unmute the server speaker and output audio out loud in sync with the live stream."
-        )
-      ) {
-        sendCommand({ action: "mode", mode: "speaker" });
-        showToast("Switched to Speaker Sync Mode", "success", "volume_up");
-      }
+      setIsSpeakerConfirmOpen(true);
     } else {
       sendCommand({ action: "mode", mode: "silent" });
       showToast("Switched to Silent Broadcast Mode (Speaker Muted)", "info", "volume_off");
     }
   }, [status, sendCommand, showToast]);
+
+  const confirmSpeakerMode = useCallback(() => {
+    sendCommand({ action: "mode", mode: "speaker" });
+    showToast("Switched to Speaker Sync Mode", "success", "volume_up");
+    setIsSpeakerConfirmOpen(false);
+  }, [sendCommand, showToast]);
 
   const togglePlaybackMode = useCallback(() => {
     if (!status) return;
@@ -316,6 +316,9 @@ export function useStreamStatus() {
     stopMusic,
     toggleLoop,
     toggleMode,
+    isSpeakerConfirmOpen,
+    setIsSpeakerConfirmOpen,
+    confirmSpeakerMode,
     togglePlaybackMode,
     resetPlaybackHistory,
     clearPlaybackList,
