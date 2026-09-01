@@ -144,21 +144,21 @@ class PlaybackManager:
             self.db.update_track_status(t["id"], "played")
             self.db.set_setting("last_played_url", t.get("url", ""))
 
-    def get_next_track_for_playback(self, loop: bool = True) -> Tuple[Optional[Dict[str, Any]], bool]:
+    def get_next_track_for_playback(self, loop: bool = True, allow_restart: bool = False) -> Tuple[Optional[Dict[str, Any]], bool]:
         """
         Picks the next track to play:
           1. If unplayed tracks ('queued') exist:
              - Picks the first unplayed track and marks it 'playing'.
              - Returns (track, False).
-          2. If ALL tracks in playback list are already 'played':
-             - If loop is True:
+          2. If ALL tracks in playback list are already 'played' (or no unplayed tracks exist):
+             - If loop is True OR allow_restart is True:
                - Resets all tracks to 'queued'.
                - If in Shuffle mode:
                    Performs a Fair Reshuffle: randomizes list such that the first song
                    is NOT the same as the last played song (if total tracks > 1).
                - Picks the first track of the new cycle, marks it 'playing'.
                - Returns (track, True [indicating new cycle started]).
-             - If loop is False:
+             - Else:
                - Returns (None, False).
         """
         # Mark currently playing track as played
@@ -180,8 +180,8 @@ class PlaybackManager:
             self.db.set_setting("last_played_url", target_track["url"])
             return self.db.get_track_by_id(target_track["id"]), False
 
-        # All tracks already played! Check loop setting
-        if loop and len(tracks) > 0:
+        # All tracks already played! Check loop or allow_restart setting
+        if (loop or allow_restart) and len(tracks) > 0:
             self.db.reset_track_history()
             mode = self.db.get_setting("playback_mode", "ordered")
 
@@ -288,30 +288,36 @@ class PlaybackManager:
         return target_mode
 
     def play_track_by_index(self, index: int) -> Optional[Dict[str, Any]]:
-        """Jumps directly to track at specific index in the list, marking it as 'playing'."""
+        """Jumps directly to track at specific index in the list, marking it as 'playing' and subsequent tracks as 'queued'."""
         tracks = self.db.get_tracks()
         if 0 <= index < len(tracks):
             target = tracks[index]
-            for t in tracks:
-                if t["id"] == target["id"]:
+            for i, t in enumerate(tracks):
+                if i < index:
+                    self.db.update_track_status(t["id"], "played")
+                elif i == index:
                     self.db.update_track_status(t["id"], "playing")
                     self.db.set_setting("last_played_url", t["url"])
-                elif t.get("status") == "playing":
-                    self.db.update_track_status(t["id"], "played")
+                else:
+                    self.db.update_track_status(t["id"], "queued")
             return self.db.get_track_by_id(target["id"])
         return None
 
     def play_track_by_id(self, track_id: str) -> Optional[Dict[str, Any]]:
-        """Jumps directly to a track by ID."""
+        """Jumps directly to a track by ID, marking preceding tracks as 'played' and following tracks as 'queued'."""
         target = self.db.get_track_by_id(str(track_id))
         if target:
             tracks = self.db.get_tracks()
+            found = False
             for t in tracks:
                 if t["id"] == target["id"]:
                     self.db.update_track_status(t["id"], "playing")
                     self.db.set_setting("last_played_url", t["url"])
-                elif t.get("status") == "playing":
+                    found = True
+                elif not found:
                     self.db.update_track_status(t["id"], "played")
+                else:
+                    self.db.update_track_status(t["id"], "queued")
             return self.db.get_track_by_id(target["id"])
         return None
 

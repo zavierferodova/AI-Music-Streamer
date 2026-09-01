@@ -347,6 +347,24 @@ def build_stream_parser() -> argparse.ArgumentParser:
 def handle_play(args: argparse.Namespace) -> int:
     url = args.url
     if not url:
+        tracks = db.get_tracks()
+        if tracks:
+            server_pid = is_server_running()
+            if not server_pid:
+                print("Starting stream server daemon in background (mode: silent)...")
+                stream_script = ROOT_DIR / "stream.py"
+                subprocess.Popen(
+                    [sys.executable, str(stream_script), "--daemon", "--mode", "silent", "--port", str(DEFAULT_PORT)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                time.sleep(1.2)
+            resp = send_ipc_command({"action": "play"})
+            if resp.get("success"):
+                print("Started playback from list.")
+                return 0
+            else:
+                print(f"Warning: {resp.get('error')}", file=sys.stderr)
         print("Usage: play.py <URL|query> [VOLUME 0-100] [LOOP yes|no]", file=sys.stderr)
         return 1
 

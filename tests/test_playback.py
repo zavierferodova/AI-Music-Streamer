@@ -233,6 +233,34 @@ class TestPlaybackManager(unittest.TestCase):
         self.assertTrue(t2.get("already_exists", False))
         self.assertEqual(self.playback.get_state()["total_count"], 1)
 
+    def test_all_played_restart_on_play_command(self):
+        """Verify that when all tracks have finished playing and user plays, playback resets and starts from track 1."""
+        self.playback.add_track("https://youtube.com/watch?v=1", "Song 1")
+        self.playback.add_track("https://youtube.com/watch?v=2", "Song 2")
+        self.playback.add_track("https://youtube.com/watch?v=3", "Song 3")
+
+        # Play all 3 tracks to completion
+        self.playback.get_next_track_for_playback(loop=False)  # Song 1 playing
+        self.playback.get_next_track_for_playback(loop=False)  # Song 2 playing
+        self.playback.get_next_track_for_playback(loop=False)  # Song 3 playing
+        self.playback.mark_current_finished()                  # Song 3 played
+
+        state = self.playback.get_state()
+        self.assertEqual(state["played_count"], 3)
+        self.assertEqual(state["queued_count"], 0)
+        self.assertEqual(state["playing_count"], 0)
+
+        # User clicks Play: allow_restart=True resets track history and plays from Song 1
+        restarted_track, is_new = self.playback.get_next_track_for_playback(loop=False, allow_restart=True)
+        self.assertIsNotNone(restarted_track)
+        self.assertEqual(restarted_track["title"], "Song 1")
+        self.assertTrue(is_new)
+
+        new_state = self.playback.get_state()
+        self.assertEqual(new_state["playing_count"], 1)
+        self.assertEqual(new_state["now_playing"]["title"], "Song 1")
+        self.assertEqual(new_state["queued_count"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -424,8 +424,20 @@ class AudioEngine:
                     self.playback_mgr.mark_playing_url(url, self.original_title, self.original_thumbnail)
                     if not title:
                         self._fetch_title_async(url)
+                elif self.state == "paused" and self.current_url:
+                    self.state = "playing"
+                    if self.paused_time and self.track_start_time:
+                        self.track_start_time += (time.time() - self.paused_time)
+                    self.paused_time = None
+                    self._resume_decoder()
+                    self._sync_runtime_state()
+                    print(f"[AudioEngine] Resumed: {self.current_title}")
+                    continue
                 else:
-                    nxt, _ = self.playback_mgr.get_next_track_for_playback(loop=self.loop in ["yes", "1", "true", "on"])
+                    nxt, _ = self.playback_mgr.get_next_track_for_playback(
+                        loop=self.loop in ["yes", "1", "true", "on"],
+                        allow_restart=True,
+                    )
                     if nxt:
                         self.current_url = nxt["url"]
                         self.current_title = nxt["title"]
@@ -528,7 +540,10 @@ class AudioEngine:
             elif action in ["skip", "next"]:
                 self._stop_decoder()
                 loop_val = self.db.get_setting("loop", default=self.loop)
-                nxt, _ = self.playback_mgr.get_next_track_for_playback(loop=loop_val in ["yes", "1", "true", "on"])
+                nxt, _ = self.playback_mgr.get_next_track_for_playback(
+                    loop=loop_val in ["yes", "1", "true", "on"],
+                    allow_restart=True,
+                )
                 if nxt:
                     self.current_url = nxt["url"]
                     self.current_title = nxt["title"]
