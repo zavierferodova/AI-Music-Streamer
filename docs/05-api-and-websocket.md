@@ -144,13 +144,20 @@ Adds multiple tracks to the playback queue in bulk with optional atomic batch pl
 }
 ```
 
-#### `POST /api/playback/remove`
-Removes a track from the playback list by ID or index.
+#### `POST /api/playback/remove` (or `/api/playback/remove_bulk`)
+Removes single or multiple tracks from the playback list by ID, index, or title.
 
-**Request Payload:**
+**Request Payload (Single):**
 ```json
 {
   "id": "1725178200000_1"
+}
+```
+
+**Request Payload (Bulk):**
+```json
+{
+  "items": ["1725178200000_1", "Song B", 3]
 }
 ```
 

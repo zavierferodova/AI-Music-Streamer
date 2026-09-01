@@ -173,7 +173,8 @@ Manages the ephemeral playback list, queued tracks, and fair shuffle cycles.
 | `play-next <N|TITLE|URL>` | Moves specified track to play immediately next in queue. |
 | `reorder <ITEMS...> [--file FILE]` | Reorders active queue by 1-based index sequence, track titles, IDs, sequence files, or piped stdin (`-`). Supports partial sequence prioritization. |
 | `shuffle` | Shuffles upcoming unplayed tracks (preserves played history). |
-| `remove <INDEX_OR_ID>` | Removes track at specified 1-based index or ID. |
+| `remove <INDEX_OR_ID...>` | Removes one or more tracks at specified 1-based indices, titles, or IDs. |
+| `remove-bulk <ITEMS...> [--file FILE]` | Removes multiple tracks simultaneously (supports positional arguments, `--file <txt/json>`, stdin `-`). |
 | `play <INDEX_OR_ID>` | Shifts track to active position and marks previous song as played. |
 | `next` | Skips current track and plays next in queue. |
 | `reset-history` | Resets all played tracks back to queued status for replay. |

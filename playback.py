@@ -19,8 +19,10 @@ Usage:
   ./playback.py next
   ./playback.py prev
   ./playback.py play [N]
-  ./playback.py interrupt <URL|query>
-  ./playback.py remove <N>
+  ./playback.py remove <N1|TITLE1> [N2|TITLE2...]
+  ./playback.py remove-bulk <ITEM1> <ITEM2> ...
+  ./playback.py remove-bulk --file <remove.txt|remove.json>
+  ./playback.py remove-bulk -  # Read items to remove from stdin
   ./playback.py reset-history
   ./playback.py clear
 """

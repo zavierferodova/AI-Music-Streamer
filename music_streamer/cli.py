@@ -248,6 +248,11 @@ def build_playback_parser() -> argparse.ArgumentParser:
             "play",
             "interrupt",
             "remove",
+            "rm",
+            "remove-bulk",
+            "rm-bulk",
+            "remove-many",
+            "delete-bulk",
             "reset-history",
             "clear",
         ],
@@ -1037,18 +1042,86 @@ def handle_playback(args: argparse.Namespace) -> int:
         print("Interrupted — playing now!")
         return 0
 
-    elif cmd == "remove":
-        if not targets:
-            print("Usage: playback.py remove <N>", file=sys.stderr)
+    elif cmd in ["remove", "rm", "remove-bulk", "rm-bulk", "remove-many", "delete-bulk"]:
+        items_to_remove: List[Any] = []
+
+        # 1. From file if specified
+        file_path = getattr(args, "file", None)
+        if file_path:
+            p = Path(file_path).expanduser().resolve()
+            if not p.exists():
+                print(f"Error: File not found: {file_path}", file=sys.stderr)
+                return 1
+            content = p.read_text(encoding="utf-8").strip()
+            if content.startswith("[") and content.endswith("]"):
+                try:
+                    parsed = json.loads(content)
+                    if isinstance(parsed, list):
+                        items_to_remove.extend(parsed)
+                except Exception:
+                    for line in content.splitlines():
+                        if line.strip() and not line.strip().startswith("#"):
+                            items_to_remove.append(line.strip())
+            else:
+                for line in content.splitlines():
+                    if line.strip() and not line.strip().startswith("#"):
+                        items_to_remove.append(line.strip())
+
+        # 2. From stdin if target is '-'
+        if targets and targets[0] == "-":
+            stdin_content = sys.stdin.read().strip()
+            if stdin_content.startswith("[") and stdin_content.endswith("]"):
+                try:
+                    parsed = json.loads(stdin_content)
+                    if isinstance(parsed, list):
+                        items_to_remove.extend(parsed)
+                except Exception:
+                    for line in stdin_content.splitlines():
+                        if line.strip() and not line.strip().startswith("#"):
+                            items_to_remove.append(line.strip())
+            else:
+                for line in stdin_content.splitlines():
+                    if line.strip() and not line.strip().startswith("#"):
+                        items_to_remove.append(line.strip())
+
+        # 3. From CLI positional targets
+        elif targets:
+            joined = " ".join(targets)
+            if joined.startswith("[") and joined.endswith("]"):
+                try:
+                    parsed = json.loads(joined)
+                    if isinstance(parsed, list):
+                        items_to_remove.extend(parsed)
+                except Exception:
+                    for t in targets:
+                        for piece in str(t).split(","):
+                            p = piece.strip()
+                            if p:
+                                items_to_remove.append(p)
+            else:
+                for t in targets:
+                    for piece in str(t).split(","):
+                        p = piece.strip()
+                        if p:
+                            items_to_remove.append(p)
+
+        if not items_to_remove:
+            print("Usage: playback.py remove <N|TITLE|ID...> (e.g. playback.py remove 2 3, playback.py remove-bulk 'Song A' 'Song B')", file=sys.stderr)
             return 1
-        idx = int(targets[0]) - 1 if targets[0].isdigit() else targets[0]
-        if playback_mgr.remove_track(idx):
-            print(f"✓ Removed track #{targets[0]} from playback list")
+
+        res = playback_mgr.remove_tracks_bulk(items_to_remove)
+        if res.get("status") == "ok":
+            removed = res.get("removed_tracks", [])
+            print(f"✓ Removed {res.get('removed_count', 0)} track(s) from playback list (Remaining: {res.get('remaining_count', 0)})")
+            for t in removed:
+                print(f"   - 🗑️ {t['title']} ({t['url']})")
             send_ipc_command({"action": "playback_update"})
+            if args.json:
+                print(json.dumps(res, indent=2, ensure_ascii=False))
+            return 0
         else:
-            print(f"Error: track #{targets[0]} not found", file=sys.stderr)
+            print(f"Error: {res.get('message', 'Failed to remove track(s)')}", file=sys.stderr)
             return 1
-        return 0
 
     elif cmd == "reset-history":
         playback_mgr.reset_history()

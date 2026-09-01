@@ -397,15 +397,19 @@ class PlaybackManager:
             return None
 
         if isinstance(query_or_id_or_index, int):
-            if 0 <= query_or_id_or_index < len(tracks):
+            if 1 <= query_or_id_or_index <= len(tracks):
+                return query_or_id_or_index - 1
+            elif 0 <= query_or_id_or_index < len(tracks):
                 return query_or_id_or_index
             return None
 
         query_str = str(query_or_id_or_index).strip()
         if query_str.isdigit():
-            idx = int(query_str) - 1
-            if 0 <= idx < len(tracks):
-                return idx
+            val = int(query_str)
+            if 1 <= val <= len(tracks):
+                return val - 1
+            elif val == 0 and len(tracks) > 0:
+                return 0
 
         for i, t in enumerate(tracks):
             if t.get("id") == query_str or t.get("url") == query_str:
@@ -698,15 +702,19 @@ class PlaybackManager:
             return None
 
         if isinstance(query_or_id_or_index, int):
-            if 0 <= query_or_id_or_index < len(tracks):
+            if 1 <= query_or_id_or_index <= len(tracks):
+                return query_or_id_or_index - 1
+            elif 0 <= query_or_id_or_index < len(tracks):
                 return query_or_id_or_index
             return None
 
         query_str = str(query_or_id_or_index).strip()
         if query_str.isdigit():
-            idx = int(query_str) - 1
-            if 0 <= idx < len(tracks):
-                return idx
+            val = int(query_str)
+            if 1 <= val <= len(tracks):
+                return val - 1
+            elif val == 0 and len(tracks) > 0:
+                return 0
 
         for i, t in enumerate(tracks):
             if t.get("id") == query_str or t.get("url") == query_str:
@@ -1035,14 +1043,69 @@ class PlaybackManager:
         return True
 
     def remove_track(self, index_or_id: Any) -> bool:
-        """Removes a track from the playback list by index or ID."""
+        """Removes a track from the playback list by index, ID, URL, or title match."""
         try:
             idx = int(index_or_id)
             if self.db.remove_track_by_index(idx):
                 return True
         except (ValueError, TypeError):
             pass
-        return self.db.remove_track_by_id(str(index_or_id))
+        if self.db.remove_track_by_id(str(index_or_id)):
+            return True
+
+        # Fallback: resolve via find_track_index
+        idx = self.find_track_index(index_or_id)
+        if idx is not None:
+            return self.db.remove_track_by_index(idx)
+        return False
+
+    def remove_tracks_bulk(self, items: List[Any]) -> Dict[str, Any]:
+        """
+        Removes multiple tracks from the playback list in bulk.
+        Each item can be a 1-based index, track ID, URL, title substring, or dict.
+        Deletes all resolved tracks atomically while preserving the relative order of remaining tracks.
+        """
+        tracks = self.db.get_tracks()
+        if not tracks or not items:
+            return {"status": "ok", "removed_count": 0, "removed_tracks": [], "remaining_count": len(tracks), "tracks": tracks}
+
+        to_remove = []
+        used_ids = set()
+
+        for it in items:
+            if isinstance(it, dict):
+                ref = it.get("id") or it.get("url") or it.get("title") or it.get("index")
+            else:
+                ref = it
+
+            if ref is None:
+                continue
+
+            idx = self._find_index_in_tracks(tracks, ref)
+            if idx is not None:
+                cand = tracks[idx]
+                if cand["id"] not in used_ids:
+                    to_remove.append(cand)
+                    used_ids.add(cand["id"])
+
+        if not to_remove:
+            return {"status": "error", "message": "No matching tracks found to remove", "removed_count": 0, "remaining_count": len(tracks), "tracks": tracks}
+
+        for t in to_remove:
+            self.db.remove_track_by_id(t["id"])
+
+        remaining_tracks = self.db.get_tracks()
+        if remaining_tracks:
+            self.db.reorder_tracks([t["id"] for t in remaining_tracks])
+            remaining_tracks = self.db.get_tracks()
+
+        return {
+            "status": "ok",
+            "removed_count": len(to_remove),
+            "removed_tracks": to_remove,
+            "remaining_count": len(remaining_tracks),
+            "tracks": remaining_tracks,
+        }
 
     def reset_history(self):
         """Resets all played tracks back to 'queued' state for a fresh replay."""

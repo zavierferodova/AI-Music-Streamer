@@ -240,6 +240,10 @@ cat tracks.txt | ~/music-streamer/playback.py add-bulk - # Bulk add from piped s
 cat order.txt | ~/music-streamer/playback.py reorder - # Reorder from piped stdin
 ~/music-streamer/playback.py shuffle           # Randomize unplayed tracks (preserves played history)
 ~/music-streamer/playback.py remove 2          # Remove 2nd track from list
+~/music-streamer/playback.py remove 2 4 5        # Remove multiple tracks by 1-based indices
+~/music-streamer/playback.py remove-bulk "Song A" "Song B" # Bulk remove tracks by titles or IDs
+~/music-streamer/playback.py remove-bulk --file /path/to/remove.txt # Bulk remove from file
+cat remove.txt | ~/music-streamer/playback.py remove-bulk - # Bulk remove from piped stdin
 ~/music-streamer/playback.py reset-history     # Reset played tracks to unplayed for fresh replay
 ~/music-streamer/playback.py clear             # Clear entire playback list
 ~/music-streamer/playback.py next              # Skip current track, play next in list

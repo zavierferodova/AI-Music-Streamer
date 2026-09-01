@@ -553,6 +553,22 @@ class TestPlaybackManager(unittest.TestCase):
         titles2 = [t["title"] for t in self.playback.get_state()["tracks"]]
         self.assertEqual(titles2, ["Track 1", "Track 2", "Track 3", "Track 4"])
 
+    def test_remove_tracks_bulk(self):
+        """Verify removing multiple tracks in bulk by indices, titles, and IDs."""
+        self.playback.add_track("https://youtube.com/watch?v=r1", "Track A")
+        self.playback.add_track("https://youtube.com/watch?v=r2", "Track B")
+        self.playback.add_track("https://youtube.com/watch?v=r3", "Track C")
+        self.playback.add_track("https://youtube.com/watch?v=r4", "Track D")
+
+        # Remove Track B and Track D by titles/indices
+        res = self.playback.remove_tracks_bulk(["Track B", 4])
+        self.assertEqual(res["status"], "ok")
+        self.assertEqual(res["removed_count"], 2)
+        self.assertEqual(res["remaining_count"], 2)
+
+        titles = [t["title"] for t in self.playback.get_state()["tracks"]]
+        self.assertEqual(titles, ["Track A", "Track C"])
+
 
 if __name__ == "__main__":
     unittest.main()

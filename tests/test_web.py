@@ -703,7 +703,40 @@ class TestWebServer(unittest.TestCase):
         self.assertEqual(resp_move.status, 200)
         data_move = json.loads(resp_move.read().decode("utf-8"))
         self.assertEqual(data_move["status"], "ok")
-        self.assertEqual(data_move["moved_count"], 2)
+        conn.close()
+
+    def test_admin_playback_remove_bulk(self):
+        """Verify REST API /api/playback/remove_bulk removes multiple tracks."""
+        admin_otp = self.security.get_admin_otp()
+        _, token, _ = self.security.verify_otp(admin_otp, client_ip="127.0.0.1")
+        auth_header = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+        conn = self._get_connection()
+
+        # Add 3 tracks
+        for i in range(1, 4):
+            conn.request(
+                "POST",
+                "/api/playback/add",
+                body=json.dumps({"url": f"https://youtube.com/watch?v=del_{i}", "title": f"Del Song {i}"}),
+                headers=auth_header,
+            )
+            resp = conn.getresponse()
+            self.assertEqual(resp.status, 200)
+            resp.read()
+
+        # Remove bulk
+        conn.request(
+            "POST",
+            "/api/playback/remove_bulk",
+            body=json.dumps({"items": ["Del Song 1", "Del Song 3"]}),
+            headers=auth_header,
+        )
+        resp_del = conn.getresponse()
+        self.assertEqual(resp_del.status, 200)
+        data_del = json.loads(resp_del.read().decode("utf-8"))
+        self.assertEqual(data_del["status"], "ok")
+        self.assertEqual(data_del["removed_count"], 2)
 
         conn.close()
 

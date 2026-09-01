@@ -942,11 +942,24 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             )
             self._send_json({"status": "ok", "action": "interrupt"})
 
+        elif path in ["/api/playback/remove_bulk", "/api/queue/remove_bulk", "/api/playback/bulk_remove"]:
+            items = payload.get("items") or payload.get("ids") or payload.get("indices") or payload.get("tracks") or []
+            res = mgr.remove_tracks_bulk(items)
+            self.server.ws_hub.broadcast()
+            self._send_json(res)
+
         elif path in ["/api/playback/remove", "/api/queue/remove"]:
-            idx = payload.get("index")
-            track_id = payload.get("id")
-            mgr.remove_track(track_id if track_id is not None else idx)
-            self._send_json({"status": "ok", "action": "remove"})
+            items = payload.get("items") or payload.get("ids") or payload.get("indices") or payload.get("tracks")
+            if items and isinstance(items, list):
+                res = mgr.remove_tracks_bulk(items)
+                self.server.ws_hub.broadcast()
+                self._send_json(res)
+            else:
+                idx = payload.get("index")
+                track_id = payload.get("id")
+                ok = mgr.remove_track(track_id if track_id is not None else idx)
+                self.server.ws_hub.broadcast()
+                self._send_json({"status": "ok" if ok else "error", "action": "remove", "removed": ok})
 
         elif path in ["/api/playback/move", "/api/queue/move"]:
             from_idx = payload.get("from_index")

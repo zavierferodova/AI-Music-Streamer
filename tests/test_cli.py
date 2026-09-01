@@ -99,6 +99,14 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(args_reorder_bulk.command, "reorder-bulk")
         self.assertEqual(args_reorder_bulk.file, "order.txt")
 
+        args_remove_bulk = parser.parse_args(["remove-bulk", "2", "3", "5"])
+        self.assertEqual(args_remove_bulk.command, "remove-bulk")
+        self.assertEqual(args_remove_bulk.target, ["2", "3", "5"])
+
+        args_rm_file = parser.parse_args(["rm-bulk", "--file", "del.txt"])
+        self.assertEqual(args_rm_file.command, "rm-bulk")
+        self.assertEqual(args_rm_file.file, "del.txt")
+
     def test_volume_parser(self):
         """Verify volume CLI arguments."""
         parser = build_volume_parser()
