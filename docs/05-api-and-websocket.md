@@ -112,15 +112,21 @@ Returns comprehensive playback engine state, current track, volume, queue counts
 ### 2.4 Playback Queue Management (Admin Role Required)
 
 #### `POST /api/playback/add`
-Appends a track to the ephemeral playback queue (deduplicated).
+Appends or inserts a track to the ephemeral playback queue (deduplicated) with optional custom order placement.
 
 **Request Payload:**
 ```json
 {
   "url": "https://www.youtube.com/watch?v=fBnqChaU-ck",
-  "title": "GuyonWaton - Wirang"
+  "title": "GuyonWaton - Wirang",
+  "order": "next",
+  "after": "Denny Caknan",
+  "before": 3,
+  "position": 2,
+  "next": true
 }
 ```
+*(All ordering fields `order`, `after`, `before`, `position`, `next` are optional)*
 
 #### `POST /api/playback/remove`
 Removes a track from the playback list by ID or index.

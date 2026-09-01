@@ -41,12 +41,28 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(args.command, "add")
         self.assertEqual(args.target, ["https://youtube.com/watch?v=123"])
 
+        # Test custom order flags
+        args_next = parser.parse_args(["add", "https://youtube.com/watch?v=123", "--next"])
+        self.assertTrue(args_next.next)
+
+        args_after = parser.parse_args(["add", "https://youtube.com/watch?v=123", "--after", "Song 1"])
+        self.assertEqual(args_after.after, "Song 1")
+
+        args_before = parser.parse_args(["add", "https://youtube.com/watch?v=123", "--before", "Song 2"])
+        self.assertEqual(args_before.before, "Song 2")
+
+        args_pos = parser.parse_args(["add", "https://youtube.com/watch?v=123", "--position", "2"])
+        self.assertEqual(args_pos.position, "2")
+
+        args_order = parser.parse_args(["add", "https://youtube.com/watch?v=123", "--order", "next"])
+        self.assertEqual(args_order.order, "next")
+
         args_list = parser.parse_args(["list", "--json"])
         self.assertEqual(args_list.command, "list")
         self.assertTrue(args_list.json)
 
-        args_next = parser.parse_args(["next"])
-        self.assertEqual(args_next.command, "next")
+        args_next_cmd = parser.parse_args(["next"])
+        self.assertEqual(args_next_cmd.command, "next")
 
         args_prev = parser.parse_args(["prev"])
         self.assertEqual(args_prev.command, "prev")

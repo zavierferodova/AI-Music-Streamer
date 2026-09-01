@@ -985,9 +985,15 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
         elif path in ["/api/playback/add", "/api/queue/add"]:
             url = payload.get("url")
             title = payload.get("title") or url
+            order = payload.get("order")
+            after = payload.get("after")
+            before = payload.get("before")
+            position = payload.get("position")
+            if payload.get("next") is True:
+                order = "next"
             t = None
             if url:
-                t = mgr.add_track(url, title)
+                t = mgr.add_track(url, title, order=order, after=after, before=before, position=position)
             self.server.ws_hub.broadcast()
             if t and t.get("already_exists"):
                 self._send_json({

@@ -94,8 +94,8 @@ Trigger phrases: "play music", "stream music", "search music", "queue", "shuffle
 ~/music-streamer/stream.py speaker
 ```
 
-### 3. Search & Local-First Discovery Protocol
-Before playing any music query requested by the user, **ALWAYS search first via `search.py --json`**:
+### 3. Search & Discovery Protocol (Local-First)
+Before playing or queueing any music requested by query, **ALWAYS search first via `search.py --json`**:
 ```bash
 # JSON format for AI agents (returns both local_matches and web_results in one call)
 ~/music-streamer/search.py --json "Wirang" 5
@@ -110,44 +110,58 @@ Before playing any music query requested by the user, **ALWAYS search first via 
       "url": "https://www.youtube.com/watch?v=78Y0SxVVxP4",
       "title": "Denny Caknan - Wirang (Official Music Video)",
       "playlist_name": "Top Pop Hits",
-      "source_label": "Playlist: Top Pop Hits"
+      "source_label": "Playlist: Top Pop Hits",
+      "is_exact_match": true,
+      "match_score": 1.0
     }
   ],
   "web_count": 5,
   "web_results": [
     {
-      "id": "fBnqChaU-ck",
-      "title": "GuyonWaton - Wirang (Official Music Video)",
-      "url": "https://www.youtube.com/watch?v=fBnqChaU-ck"
-    },
-    {
       "id": "78Y0SxVVxP4",
       "title": "Denny Caknan - Wirang (Official Music Video)",
       "url": "https://www.youtube.com/watch?v=78Y0SxVVxP4"
+    },
+    {
+      "id": "fBnqChaU-ck",
+      "title": "GuyonWaton - Wirang (Official Music Video)",
+      "url": "https://www.youtube.com/watch?v=fBnqChaU-ck"
     }
   ]
 }
 ```
 
-### 4. Mandatory Confirmation Protocol (Local vs. Web)
+### 4. Playback & Queue Decision Protocol (Local Exact → Web Exact → Ask if in Doubt)
 
-When the user asks to play a song/artist:
-1. **Execute Search**: Run `~/music-streamer/search.py --json "<query>" 5`.
-2. **If Local Matches Exist (`local_count > 0`)**:
-   Use `ask_question` to ask the user whether to play from their local library or search from the web.
-   **Options format:**
-   - `"(Recommended) Play from Local Library: <Title> (<source_label>)"`
-   - `"Choose a version from YouTube / Online Search"`
-3. **If User selects Web or No Local Match Exists (`local_count == 0`)**:
-   Use `ask_question` to present the top online results (e.g. `"<Title 1>"`, `"<Title 2>"`) so the user can choose the exact version they want.
-4. **Execute Playback**:
-   Once the user picks an option, play the confirmed URL:
-   ```bash
-   ~/music-streamer/play.py "<URL>" 80 yes
-   ```
+When the user asks to play a song or add a track to the playback queue:
+
+1. **Step 1: Execute Search**:
+   Run `~/music-streamer/search.py --json "<query>" 5`.
+
+2. **Step 2: Check Local Exact Match**:
+   - If an **exact match exists in the local library** (`is_exact_match: true` or high confidence `match_score >= 0.90`):
+     - **Play directly**: `~/music-streamer/play.py "<URL>" 80 yes`
+     - **Or add to queue**: `~/music-streamer/playback.py add-url "<URL>" "<TITLE>" [--next|--after <target>|--before <target>|--position <N>]`
+     - *No confirmation prompt required.*
+
+3. **Step 3: Check Web Exact Match (if no local match)**:
+   - If **no match is found in local library**, check `web_results`.
+   - If the top web result is an **unambiguous exact match** for the requested track (e.g., official song/audio cleanly matching query):
+     - **Play directly**: `~/music-streamer/play.py "<web_url>" 80 yes`
+     - **Or add to queue**: `~/music-streamer/playback.py add-url "<web_url>" "<web_title>" [--next|--after <target>|--before <target>|--position <N>]`
+     - *No confirmation prompt required.*
+
+4. **Step 4: Ask User if in Doubt / Ambiguity Exists**:
+   - If you are in doubt between local and web results (e.g. partial local match, multiple covers, remix vs. original, live versions, or conflicting interpretations):
+     - Use `ask_question` to let the user select their preferred source:
+       - `"(Recommended) Play from Local Library: <Title> (<source_label>)"` (if local match exists)
+       - `"<Web Option 1 Title>"`
+       - `"<Web Option 2 Title>"`
+       - `"<Web Option 3 Title>"`
+     - Once confirmed, execute playback or queue the selected URL.
 
 ### 5. Play Direct URL
-If the user provides an explicit direct URL (e.g., `https://www.youtube.com/watch?v=...`), search confirmation is not required:
+If the user provides an explicit direct URL (e.g., `https://www.youtube.com/watch?v=...`), search and confirmation are not required:
 ```bash
 ~/music-streamer/play.py "https://www.youtube.com/watch?v=78Y0SxVVxP4" 80 yes
 ```
@@ -173,10 +187,17 @@ If the user provides an explicit direct URL (e.g., `https://www.youtube.com/watc
 ~/music-streamer/loop.py off                # Disable repeat (stops after playing once)
 ~/music-streamer/loop.py toggle             # Flip loop setting
 
-# Playback list management (Strictly deduplicated)
+# Playback list management (Strictly deduplicated with custom ordering)
 ~/music-streamer/playback.py list [--json]     # Show full tracklist (Played, Playing, Upcoming)
-~/music-streamer/playback.py add "Alan Walker" # Search & append first result (deduplicated)
-~/music-streamer/playback.py add-url "URL" "Title" # Append specific confirmed URL
+~/music-streamer/playback.py add "Alan Walker" # Append to end of queue (default)
+~/music-streamer/playback.py add "Alan Walker" --next   # Add to play immediately next after current
+~/music-streamer/playback.py add "Alan Walker" --after "Wirang" # Insert immediately after specific track
+~/music-streamer/playback.py add "Alan Walker" --before 3      # Insert immediately before 3rd track
+~/music-streamer/playback.py add "Alan Walker" --position 2    # Insert at specific 1-based position
+~/music-streamer/playback.py add "Alan Walker" next     # Natural language order shorthand
+~/music-streamer/playback.py add "Alan Walker" after "Wirang" # Shorthand after syntax
+~/music-streamer/playback.py add-url "URL" "Title" --next # Add URL to play next
+~/music-streamer/playback.py add-url "URL" "Title" --after "Wirang" # Add URL after track
 ~/music-streamer/playback.py move 4 1          # Move 4th track to 1st position (1-indexed)
 ~/music-streamer/playback.py move "FANCY" top  # Move track by name to top of queue
 ~/music-streamer/playback.py play-next "FANCY" # Move track to play immediately next

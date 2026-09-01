@@ -399,6 +399,64 @@ class TestPlaybackManager(unittest.TestCase):
         self.assertEqual(new_state["now_playing"]["title"], "Song 1")
         self.assertEqual(new_state["queued_count"], 2)
 
+    def test_add_track_custom_order_next(self):
+        """Verify adding track with order='next' places it immediately after playing track or top of queue."""
+        # Case A: No playing track -> inserted at top (position #1)
+        self.playback.add_track("https://youtube.com/watch?v=1", "Song 1")
+        self.playback.add_track("https://youtube.com/watch?v=2", "Song 2")
+        t_next = self.playback.add_track("https://youtube.com/watch?v=new1", "Song Next", order="next")
+        self.assertEqual(t_next["position"], 1)
+        state = self.playback.get_state()
+        self.assertEqual(state["tracks"][0]["title"], "Song Next")
+        self.assertEqual(state["tracks"][1]["title"], "Song 1")
+        self.assertEqual(state["tracks"][2]["title"], "Song 2")
+
+        # Case B: With playing track -> inserted immediately after playing track
+        self.playback.mark_playing_url("https://youtube.com/watch?v=1", "Song 1")
+        t_after_play = self.playback.add_track("https://youtube.com/watch?v=vip", "Song VIP", order="next")
+        state2 = self.playback.get_state()
+        # Find index of Song VIP
+        vip_idx = next(i for i, t in enumerate(state2["tracks"]) if t["title"] == "Song VIP")
+        playing_idx = next(i for i, t in enumerate(state2["tracks"]) if t.get("status") == "playing")
+        self.assertEqual(vip_idx, playing_idx + 1)
+
+    def test_add_track_custom_order_after_and_before(self):
+        """Verify adding track with after=<target> and before=<target>."""
+        self.playback.add_track("https://youtube.com/watch?v=1", "Song 1")
+        self.playback.add_track("https://youtube.com/watch?v=2", "Song 2")
+        self.playback.add_track("https://youtube.com/watch?v=3", "Song 3")
+
+        # Insert after Song 1
+        t_after = self.playback.add_track("https://youtube.com/watch?v=after1", "Song 1.5", after="Song 1")
+        state = self.playback.get_state()
+        titles = [t["title"] for t in state["tracks"]]
+        self.assertEqual(titles, ["Song 1", "Song 1.5", "Song 2", "Song 3"])
+
+        # Insert before Song 3
+        t_before = self.playback.add_track("https://youtube.com/watch?v=before3", "Song 2.5", before="Song 3")
+        state2 = self.playback.get_state()
+        titles2 = [t["title"] for t in state2["tracks"]]
+        self.assertEqual(titles2, ["Song 1", "Song 1.5", "Song 2", "Song 2.5", "Song 3"])
+
+    def test_add_track_custom_order_position_and_duplicate(self):
+        """Verify adding track with numeric position and repositioning duplicate track."""
+        self.playback.add_track("https://youtube.com/watch?v=1", "Song 1")
+        self.playback.add_track("https://youtube.com/watch?v=2", "Song 2")
+        self.playback.add_track("https://youtube.com/watch?v=3", "Song 3")
+
+        # Insert at position 2
+        t_pos = self.playback.add_track("https://youtube.com/watch?v=pos2", "Song Pos 2", position=2)
+        state = self.playback.get_state()
+        titles = [t["title"] for t in state["tracks"]]
+        self.assertEqual(titles, ["Song 1", "Song Pos 2", "Song 2", "Song 3"])
+
+        # Re-adding Song 3 with order='next' / position=1 repositions it
+        dup = self.playback.add_track("https://youtube.com/watch?v=3", "Song 3", position=1)
+        self.assertTrue(dup.get("already_exists"))
+        state2 = self.playback.get_state()
+        titles2 = [t["title"] for t in state2["tracks"]]
+        self.assertEqual(titles2[0], "Song 3")
+
 
 if __name__ == "__main__":
     unittest.main()

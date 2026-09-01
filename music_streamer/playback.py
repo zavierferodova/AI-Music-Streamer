@@ -57,8 +57,20 @@ class PlaybackManager:
         title: str = "",
         thumbnail: Optional[str] = None,
         auto_fetch: bool = True,
+        order: Optional[str] = None,
+        after: Optional[Any] = None,
+        before: Optional[Any] = None,
+        position: Optional[Any] = None,
     ) -> Dict[str, Any]:
-        """Appends a new track to the playback list as 'queued' with fetched metadata if title is not provided."""
+        """
+        Appends or inserts a new track in the playback list as 'queued' with fetched metadata.
+        Supports custom ordering placement:
+          - order='next' / 'top': Play immediately next (after currently playing track).
+          - order='last' / 'bottom': Append to the end of the playback list.
+          - after=<target>: Insert immediately after target track (by index, title query, URL, or ID).
+          - before=<target>: Insert immediately before target track (by index, title query, URL, or ID).
+          - position=<N>: Insert at 1-based position N in the playback list.
+        """
         if not url or not url.strip():
             raise ValueError("Track URL or search query is required")
 
@@ -88,7 +100,111 @@ class PlaybackManager:
 
         if not thumbnail:
             thumbnail = get_thumbnail_for_url(url)
-        return self.db.add_track(url=url, title=title, thumbnail=thumbnail, status="queued")
+
+        track_res = self.db.add_track(url=url, title=title, thumbnail=thumbnail, status="queued")
+
+        # Resolve custom ordering if requested
+        order_type = None
+        target_spec = None
+
+        if after is not None:
+            order_type = "after"
+            target_spec = after
+        elif before is not None:
+            order_type = "before"
+            target_spec = before
+        elif position is not None:
+            if isinstance(position, str):
+                pos_lower = position.strip().lower()
+                if pos_lower in ["next", "top", "first", "next-up"]:
+                    order_type = "next"
+                elif pos_lower in ["last", "bottom", "end"]:
+                    order_type = "last"
+                elif pos_lower.isdigit():
+                    order_type = "position"
+                    target_spec = int(pos_lower)
+                else:
+                    order_type = "position"
+                    target_spec = position
+            else:
+                order_type = "position"
+                target_spec = int(position)
+        elif order is not None:
+            order_str = str(order).strip()
+            order_lower = order_str.lower()
+            if order_lower in ["next", "top", "first", "next-up"]:
+                order_type = "next"
+            elif order_lower in ["last", "bottom", "end"]:
+                order_type = "last"
+            elif order_lower.startswith("after:") or order_lower.startswith("after "):
+                order_type = "after"
+                target_spec = order_str[5:].strip().lstrip(":").strip()
+            elif order_lower.startswith("before:") or order_lower.startswith("before "):
+                order_type = "before"
+                target_spec = order_str[6:].strip().lstrip(":").strip()
+            elif order_lower.startswith("pos:") or order_lower.startswith("position:"):
+                order_type = "position"
+                target_spec = order_str.split(":", 1)[1].strip()
+            elif order_lower.isdigit():
+                order_type = "position"
+                target_spec = int(order_lower)
+            else:
+                order_type = "position"
+                target_spec = order_str
+
+        already_exists = track_res.get("already_exists", False)
+
+        if order_type and order_type != "last":
+            tracks = self.db.get_tracks()
+            from_idx = next((i for i, t in enumerate(tracks) if t["id"] == track_res["id"]), None)
+            if from_idx is not None and len(tracks) > 1:
+                to_idx = None
+                if order_type == "next":
+                    playing_idx = next((i for i, t in enumerate(tracks) if t.get("status") == "playing"), None)
+                    if playing_idx is not None:
+                        to_idx = playing_idx + 1 if from_idx > playing_idx else playing_idx
+                    else:
+                        first_unplayed = next((i for i, t in enumerate(tracks) if t.get("status") != "played"), 0)
+                        to_idx = first_unplayed
+
+                elif order_type == "after":
+                    ref_idx = self.find_track_index(target_spec)
+                    if ref_idx is not None:
+                        to_idx = ref_idx + 1 if from_idx > ref_idx else ref_idx
+                    else:
+                        to_idx = len(tracks) - 1
+
+                elif order_type == "before":
+                    ref_idx = self.find_track_index(target_spec)
+                    if ref_idx is not None:
+                        to_idx = ref_idx if from_idx > ref_idx else max(0, ref_idx - 1)
+                    else:
+                        first_unplayed = next((i for i, t in enumerate(tracks) if t.get("status") != "played"), 0)
+                        to_idx = first_unplayed
+
+                elif order_type == "position":
+                    if isinstance(target_spec, str) and target_spec.isdigit():
+                        target_spec = int(target_spec)
+                    if isinstance(target_spec, int):
+                        to_idx = max(0, min(len(tracks) - 1, target_spec - 1))
+                    else:
+                        ref_idx = self.find_track_index(target_spec)
+                        to_idx = ref_idx if ref_idx is not None else len(tracks) - 1
+
+                if to_idx is not None:
+                    to_idx = max(0, min(len(tracks) - 1, to_idx))
+                    self.move_track(from_idx, to_idx)
+                    updated = self.db.get_track_by_id(track_res["id"])
+                    if updated:
+                        track_res = updated
+
+        tracks = self.db.get_tracks()
+        final_idx = next((i for i, t in enumerate(tracks) if t["id"] == track_res["id"]), None)
+        if final_idx is not None:
+            track_res["position"] = final_idx + 1
+        track_res["already_exists"] = already_exists
+
+        return track_res
 
     def mark_playing_url(
         self,

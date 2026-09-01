@@ -106,12 +106,15 @@ When modifying or extending the codebase, AI agents MUST preserve the following 
 ### 4.1 Operating via the `music-streamer` Skill
 AI agents must consult and execute workflows defined in the `music-streamer` skill ([`.agents/skills/music-streamer/SKILL.md`](.agents/skills/music-streamer/SKILL.md)) for all user-facing player operations, queue reordering, fair shuffle, playlist manipulation, and broadcast lifecycle commands.
 
-### 4.2 Search & Confirmation Protocol (Local-First)
-Before executing a music playback request on behalf of a user:
+### 4.2 Playback & Queue Decision Protocol (Local Exact → Web Exact → Ask if in Doubt)
+Before executing a music playback or queue request:
 1. **Search First**: Execute `~/music-streamer/search.py --json "<query>" 5`.
-2. **If `local_count > 0`**: Prompt the user whether to play from their local library or search the web.
-3. **If `local_count == 0` or User picks Web**: Present online options for user selection before playing.
-4. **Execute Playback**: Run `./play.py "<URL>" 80 yes`.
+2. **Local Exact Match**: If found in local library (`is_exact_match: true` or `match_score >= 0.90`), play or queue it directly without extra prompts.
+3. **Web Exact Match (if no local match)**: If not in local library but web search has an unambiguous exact match, play or queue it directly.
+4. **Ask User if in Doubt**: If there is ambiguity or doubt between local and web results (e.g. multiple versions, partial match, live vs. official), prompt the user using `ask_question` to choose the desired version before playing.
+5. **Execute Playback/Queue**:
+   - Direct Play: `./play.py "<URL>" 80 yes`
+   - Queue Track: `./playback.py add-url "<URL>" "<TITLE>" [--next|--after <target>|--before <target>|--position <N>]`
 
 ### 4.3 Starting and Managing the Daemon
 ```bash

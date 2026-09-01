@@ -249,6 +249,12 @@ def build_playback_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("target", nargs="*", help="Arguments for subcommand (URL, query, index, etc.)")
     parser.add_argument("--json", action="store_true", help="Output list in JSON format")
+    parser.add_argument("--next", action="store_true", help="Add track to play immediately next (after current track)")
+    parser.add_argument("--last", action="store_true", help="Append track to end of playback list (default)")
+    parser.add_argument("--after", help="Insert track immediately after specified track (by title, URL, index, or ID)")
+    parser.add_argument("--before", help="Insert track immediately before specified track (by title, URL, index, or ID)")
+    parser.add_argument("--position", help="Insert track at specific 1-based position in playback list")
+    parser.add_argument("--order", help="Custom placement order: 'next', 'last', 'after:<target>', 'before:<target>', '<position>'")
     return parser
 
 
@@ -544,21 +550,59 @@ def handle_search(args: argparse.Namespace) -> int:
         return 1
 
 
+def extract_playback_order(args: argparse.Namespace, targets: List[str]) -> Tuple[List[str], Dict[str, Any]]:
+    order_kwargs: Dict[str, Any] = {}
+    if getattr(args, "next", False):
+        order_kwargs["order"] = "next"
+    elif getattr(args, "last", False):
+        order_kwargs["order"] = "last"
+    elif getattr(args, "after", None):
+        order_kwargs["after"] = args.after
+    elif getattr(args, "before", None):
+        order_kwargs["before"] = args.before
+    elif getattr(args, "position", None):
+        order_kwargs["position"] = args.position
+    elif getattr(args, "order", None):
+        order_kwargs["order"] = args.order
+
+    # If flags were explicitly passed, remaining targets are pure query/url
+    if order_kwargs:
+        return targets, order_kwargs
+
+    # Natural language / positional parsing fallback
+    if len(targets) >= 2:
+        last_arg = targets[-1].strip().lower()
+        if last_arg in ["next", "top", "first", "next-up"]:
+            return targets[:-1], {"order": "next"}
+        elif last_arg in ["last", "bottom", "end"]:
+            return targets[:-1], {"order": "last"}
+        elif len(targets) >= 3 and targets[-2].strip().lower() == "after":
+            return targets[:-2], {"after": targets[-1]}
+        elif len(targets) >= 3 and targets[-2].strip().lower() == "before":
+            return targets[:-2], {"before": targets[-1]}
+        elif len(targets) >= 2 and targets[-1].strip().isdigit():
+            return targets[:-1], {"position": int(targets[-1].strip())}
+
+    return targets, order_kwargs
+
+
 def handle_playback(args: argparse.Namespace) -> int:
     cmd = args.command
     targets = args.target
 
     if cmd == "add":
-        if not targets:
-            print("Usage: playback.py add <URL|query>", file=sys.stderr)
+        rem_targets, order_kwargs = extract_playback_order(args, targets)
+        if not rem_targets:
+            print("Usage: playback.py add <URL|query> [--next|--last|--after <target>|--before <target>|--position <N>]", file=sys.stderr)
             return 1
-        inp = " ".join(targets)
+        inp = " ".join(rem_targets)
         if inp.startswith("http://") or inp.startswith("https://"):
-            t = playback_mgr.add_track(inp)
+            t = playback_mgr.add_track(inp, **order_kwargs)
+            pos_str = f" (at #{t['position']})" if t and t.get("position") else ""
             if t and t.get("already_exists"):
-                print(f"⚠️ Track already exists in playback tracklist: {t['title']}")
+                print(f"⚠️ Track already exists in playback tracklist: {t['title']}{pos_str}")
             else:
-                print(f"Added to playback list: {t['title']}")
+                print(f"Added to playback list: {t['title']}{pos_str}")
         else:
             print(f"Searching: {inp}")
             res = search_music(inp, num=1)
@@ -566,25 +610,28 @@ def handle_playback(args: argparse.Namespace) -> int:
                 print(f"Error: no results for query '{inp}'", file=sys.stderr)
                 return 2
             r = res.results[0]
-            t = playback_mgr.add_track(r.url, r.title)
+            t = playback_mgr.add_track(r.url, r.title, **order_kwargs)
+            pos_str = f" (at #{t['position']})" if t and t.get("position") else ""
             if t and t.get("already_exists"):
-                print(f"⚠️ Track already exists in playback tracklist: {t['title']}")
+                print(f"⚠️ Track already exists in playback tracklist: {t['title']}{pos_str}")
             else:
-                print(f"Added to playback list: {t['title']}")
+                print(f"Added to playback list: {t['title']}{pos_str}")
         send_ipc_command({"action": "playback_update"})
         return 0
 
     elif cmd == "add-url":
-        if not targets:
-            print("Usage: playback.py add-url <URL> [TITLE]", file=sys.stderr)
+        rem_targets, order_kwargs = extract_playback_order(args, targets)
+        if not rem_targets:
+            print("Usage: playback.py add-url <URL> [TITLE] [--next|--last|--after <target>|--before <target>|--position <N>]", file=sys.stderr)
             return 1
-        url = targets[0]
-        title = " ".join(targets[1:]) if len(targets) > 1 else url
-        t = playback_mgr.add_track(url, title)
+        url = rem_targets[0]
+        title = " ".join(rem_targets[1:]) if len(rem_targets) > 1 else url
+        t = playback_mgr.add_track(url, title, **order_kwargs)
+        pos_str = f" (at #{t['position']})" if t and t.get("position") else ""
         if t and t.get("already_exists"):
-            print(f"⚠️ Track already exists in playback tracklist: {t['title']}")
+            print(f"⚠️ Track already exists in playback tracklist: {t['title']}{pos_str}")
         else:
-            print(f"Added to playback list: {t['title']}")
+            print(f"Added to playback list: {t['title']}{pos_str}")
         send_ipc_command({"action": "playback_update"})
         return 0
 

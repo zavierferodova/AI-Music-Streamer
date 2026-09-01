@@ -59,6 +59,9 @@ class TestWebServer(unittest.TestCase):
         cls.db.close()
         cls.temp_dir.cleanup()
 
+    def setUp(self):
+        self.playback_mgr.clear_all()
+
     def _get_connection(self) -> http.client.HTTPConnection:
         return http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
 
@@ -568,6 +571,52 @@ class TestWebServer(unittest.TestCase):
         )
         resp_sub = conn.getresponse()
         self.assertEqual(resp_sub.status, 403)
+
+        conn.close()
+
+    def test_admin_playback_add_custom_order(self):
+        """Verify REST API /api/playback/add supports order, after, before, and position."""
+        admin_otp = self.security.get_admin_otp()
+        _, token, _ = self.security.verify_otp(admin_otp, client_ip="127.0.0.1")
+        auth_header = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+        conn = self._get_connection()
+
+        # Add initial track
+        conn.request(
+            "POST",
+            "/api/playback/add",
+            body=json.dumps({"url": "https://youtube.com/watch?v=init1", "title": "Initial 1"}),
+            headers=auth_header,
+        )
+        resp1 = conn.getresponse()
+        self.assertEqual(resp1.status, 200)
+        data1 = json.loads(resp1.read().decode("utf-8"))
+        self.assertEqual(data1["track"]["position"], 1)
+
+        # Add next track with order='next'
+        conn.request(
+            "POST",
+            "/api/playback/add",
+            body=json.dumps({"url": "https://youtube.com/watch?v=init2", "title": "Top Track", "order": "next"}),
+            headers=auth_header,
+        )
+        resp2 = conn.getresponse()
+        self.assertEqual(resp2.status, 200)
+        data2 = json.loads(resp2.read().decode("utf-8"))
+        self.assertEqual(data2["track"]["position"], 1)
+
+        # Add track after Initial 1
+        conn.request(
+            "POST",
+            "/api/playback/add",
+            body=json.dumps({"url": "https://youtube.com/watch?v=init3", "title": "After Initial", "after": "Initial 1"}),
+            headers=auth_header,
+        )
+        resp3 = conn.getresponse()
+        self.assertEqual(resp3.status, 200)
+        data3 = json.loads(resp3.read().decode("utf-8"))
+        self.assertEqual(data3["track"]["position"], 3)
 
         conn.close()
 

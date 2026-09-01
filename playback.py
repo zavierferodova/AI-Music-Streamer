@@ -2,8 +2,9 @@
 """
 playback.py — Manage persistent playback list & track history
 Usage:
-  ./playback.py add <URL|query>
-  ./playback.py add-url <URL> [TITLE]
+  ./playback.py add <URL|query> [--next|--last|--after <target>|--before <target>|--position <N>]
+  ./playback.py add-url <URL> [TITLE] [--next|--last|--after <target>|--before <target>|--position <N>]
+  ./playback.py add <URL|query> [next|last|after <target>|before <target>|<N>]
   ./playback.py list [--json]
   ./playback.py move <FROM_N|TITLE> <TO_N|top|next|bottom>
   ./playback.py play-next <N|TITLE|URL>
