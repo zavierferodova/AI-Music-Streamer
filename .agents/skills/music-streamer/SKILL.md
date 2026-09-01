@@ -160,13 +160,37 @@ When the user asks to play a song or add a track to the playback queue:
        - `"<Web Option 3 Title>"`
      - Once confirmed, execute playback or queue the selected URL.
 
-### 5. Play Direct URL
+### 5. Adding Music to Playlists Protocol (Playlist Name Resolution)
+
+When the user asks to add a track or song to a playlist:
+1. **If Playlist Name is Explicitly Provided**:
+   - Resolve the track URL (via local library or web search).
+   - Add the track directly:
+     ```bash
+     ~/music-streamer/playlist.py add "<Playlist Name>" "<URL_or_query>"
+     ```
+2. **If Playlist Name is NOT Provided (User says "add this to playlist", "save to my playlist", etc.)**:
+   - **Query Existing Playlists**: Run `~/music-streamer/playlist.py list --json`.
+   - **If Playlists Exist**:
+     - Prompt the user using `ask_question` to choose the destination playlist:
+       - `"(Recommended) Add to '<Playlist 1>' (<N> tracks)"`
+       - `"Add to '<Playlist 2>' (<N> tracks)"`
+       - `"Create a new playlist"`
+   - **If No Playlists Exist**:
+     - Prompt the user for the name of the new playlist they wish to create.
+   - **Execute Addition**:
+     - Once confirmed, create/add the track to the selected playlist:
+       ```bash
+       ~/music-streamer/playlist.py add "<Selected Playlist>" "<URL_or_query>"
+       ```
+
+### 6. Play Direct URL
 If the user provides an explicit direct URL (e.g., `https://www.youtube.com/watch?v=...`), search and confirmation are not required:
 ```bash
 ~/music-streamer/play.py "https://www.youtube.com/watch?v=78Y0SxVVxP4" 80 yes
 ```
 
-### 6. Control While Playing (Live, no restart needed)
+### 7. Control While Playing (Live, no restart needed)
 ```bash
 # Status
 ~/music-streamer/status.py                  # Human-readable
@@ -228,7 +252,7 @@ If the user provides an explicit direct URL (e.g., `https://www.youtube.com/watc
 ~/music-streamer/stop.py --all              # Stop music AND shut down stream server daemon
 ```
 
-### 7. Client Listening
+### 8. Client Listening
 Listeners on other devices (laptops, phones, browsers) can tune in:
 - **Web Control Panel & Player**: Open `http://<SERVER_IP>:8000/` in any browser (realtime WebSocket sync, loading skeletons, buffering badges, playback error handling)
 - **Direct Media Stream**: Open `http://<SERVER_IP>:8000/stream.mp3` in VLC / mpv / browser audio

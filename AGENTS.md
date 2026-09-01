@@ -116,7 +116,16 @@ Before executing a music playback or queue request:
    - Direct Play: `./play.py "<URL>" 80 yes`
    - Queue Track: `./playback.py add-url "<URL>" "<TITLE>" [--next|--after <target>|--before <target>|--position <N>]`
 
-### 4.3 Starting and Managing the Daemon
+### 4.3 Adding Music to Playlists Protocol (Playlist Name Resolution)
+When adding music to a playlist:
+1. **If Playlist Name is Specified**: Add the track directly via `./playlist.py add "<Playlist Name>" "<URL_or_query>"`.
+2. **If Playlist Name is NOT Specified**:
+   - Query existing playlists via `./playlist.py list --json`.
+   - If playlists exist, use `ask_question` to ask the user which playlist to store the track in (or offer to create a new one).
+   - If no playlists exist, ask the user for the name of the new playlist to create.
+   - Execute `./playlist.py add "<Selected Playlist>" "<URL_or_query>"`.
+
+### 4.4 Starting and Managing the Daemon
 ```bash
 # Start background broadcast daemon
 ./stream.py --daemon --port 8000
@@ -131,7 +140,7 @@ Before executing a music playback or queue request:
 ./stream.py stop
 ```
 
-### 4.4 Running Test Suites
+### 4.5 Running Test Suites
 Always run the complete test suite before submitting code changes:
 ```bash
 .venv/bin/pytest tests/ -v
