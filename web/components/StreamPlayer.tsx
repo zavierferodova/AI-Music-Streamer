@@ -3,6 +3,45 @@
 import { Play, Pause, Loader2, Radio, ExternalLink, Copy, Zap, Volume2, VolumeX } from "lucide-react";
 import { useAudioStream } from "@/hooks/useAudioStream";
 
+interface LatencyStyle {
+  badge: string;
+  icon: string;
+  dot: string;
+  description: string;
+}
+
+function getLatencyStyle(latencyMs: number): LatencyStyle {
+  if (latencyMs < 100) {
+    return {
+      badge: "bg-emerald-500/15 border-emerald-500/30 text-emerald-300 shadow-emerald-500/10",
+      icon: "text-emerald-400 fill-emerald-400",
+      dot: "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]",
+      description: "Web Audio API Active — Sub-100ms Ultra-Low Latency",
+    };
+  } else if (latencyMs <= 300) {
+    return {
+      badge: "bg-amber-500/15 border-amber-500/30 text-amber-300 shadow-amber-500/10",
+      icon: "text-amber-400 fill-amber-400",
+      dot: "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]",
+      description: `Web Audio API Active — Smooth Live Broadcast (${latencyMs}ms buffer)`,
+    };
+  } else if (latencyMs <= 600) {
+    return {
+      badge: "bg-orange-500/15 border-orange-500/30 text-orange-300 shadow-orange-500/10",
+      icon: "text-orange-400 fill-orange-400",
+      dot: "bg-orange-400 shadow-[0_0_8px_rgba(251,146,60,0.8)]",
+      description: `Web Audio API Active — Moderate Buffer Delay (${latencyMs}ms)`,
+    };
+  } else {
+    return {
+      badge: "bg-rose-500/15 border-rose-500/30 text-rose-300 shadow-rose-500/10",
+      icon: "text-rose-400 fill-rose-400",
+      dot: "bg-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.8)]",
+      description: `Web Audio API Active — High Buffer Latency (${latencyMs}ms)`,
+    };
+  }
+}
+
 export function StreamPlayer() {
   const {
     isPlaying,
@@ -16,6 +55,8 @@ export function StreamPlayer() {
     toggleStreamAudio,
     copyStreamUrl,
   } = useAudioStream();
+
+  const latencyStyle = getLatencyStyle(latencyMs);
 
   return (
     <section
@@ -46,8 +87,11 @@ export function StreamPlayer() {
               </h3>
             </div>
             {isPlaying && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-semibold tracking-wide">
-                <Zap className="w-3 h-3 text-emerald-400 fill-emerald-400 animate-pulse" />
+              <span
+                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[10px] font-semibold tracking-wide shadow-sm transition-all ${latencyStyle.badge}`}
+                title={`Live stream playback sync latency: ${latencyMs}ms`}
+              >
+                <Zap className={`w-3 h-3 animate-pulse ${latencyStyle.icon}`} />
                 <span>Live Broadcast ({latencyMs}ms latency)</span>
               </span>
             )}
@@ -57,7 +101,7 @@ export function StreamPlayer() {
             {isBuffering
               ? "Connecting to broadcast stream..."
               : isPlaying
-              ? "Web Audio API Active — Smooth Live Broadcast"
+              ? latencyStyle.description
               : "Direct audio broadcast over WebSocket"}
           </div>
           {errorMessage && (
