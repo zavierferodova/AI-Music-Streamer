@@ -34,6 +34,7 @@ Manages the continuous HTTP broadcast server, background daemon lifecycle, dynam
 | `--public` | Starts the server with an instant Cloudflare HTTPS public tunnel. |
 | `status` | Checks if the server daemon is active and displays listener count. |
 | `stop` | Stops the running broadcast server daemon cleanly. |
+| `restart` | Stops any running daemon and relaunches a fresh broadcast daemon. |
 | `speaker` | Dynamically switches active server to `speaker` mode (unmutes ALSA). |
 | `silent` | Dynamically switches active server to `silent` mode (mutes ALSA, stream continues). |
 | `public` | Displays active public Cloudflare HTTPS tunnel URLs. |
@@ -42,6 +43,9 @@ Manages the continuous HTTP broadcast server, background daemon lifecycle, dynam
 ```bash
 # Start background broadcast daemon
 ./stream.py --daemon --port 8000
+
+# Restart the running broadcast daemon
+./stream.py restart
 
 # Switch active server to hardware speaker output on the fly
 ./stream.py speaker

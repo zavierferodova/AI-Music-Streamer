@@ -34,14 +34,14 @@ All audio is decoded from YouTube (or SoundCloud/Bandcamp) via `yt-dlp` → `ffm
 
 | Script | Purpose |
 |---|---|
-| `~/music-streamer/stream.py` | Manage continuous broadcast server: `start`, `stop`, `status`, `speaker`, `silent`, `--mode silent\|speaker` (default: `silent`), `--daemon` |
-| `~/music-streamer/web/` | Realtime Web Control Panel & audio player (`/` & `/ws` WebSocket sync) with loading states & error alerts |
+| `~/music-streamer/stream.py` | Manage continuous broadcast server: `start`, `stop`, `restart`, `status`, `speaker`, `silent`, `public`, `--mode silent\|speaker` (default: `silent`), `--daemon` |
+| `~/music-streamer/web/` | Realtime Web Control Panel & audio player (`/` & `/ws` WebSocket sync) with drag-and-drop reordering, loading states & error alerts |
 | `~/music-streamer/play.py` | Play a direct URL: `<URL> [VOL 0-100] [LOOP yes\|no]` — plays on HTTP stream (and speaker if in speaker mode) |
 | `~/music-streamer/play_search.py` | Search by query and play first result: `<query> [VOL] [LOOP]` — USE ONLY AFTER CONFIRMATION |
 | `~/music-streamer/search.py` | Search provider: `youtube` (default), `soundcloud`, `bandcamp`, `spotify` |
-| `~/music-streamer/playback.py` | Ephemeral Playback tracklist: `add/add-url/list/move/reorder/clear/shuffle/remove/next/prev/play` (deduplicated) |
+| `~/music-streamer/playback.py` | Ephemeral Playback tracklist: `add/add-url/add-bulk/list/move/move-bulk/reorder/clear/shuffle/remove/remove-bulk/next/prev/play` (deduplicated) |
 | `~/music-streamer/prev.py` | Play previous track from playback history / loop wrap |
-| `~/music-streamer/playlist.py` | Persistent Named Playlists: `create/list/show/add/remove/delete/play/queue` (deduplicated, persistent) |
+| `~/music-streamer/playlist.py` | Persistent Named Playlists: `create/list/show/add/add-bulk/remove/remove-bulk/move/move-bulk/reorder/delete/play/queue` (deduplicated, persistent) |
 | `~/music-streamer/pause.py` | Pause: pauses playback and streams comfort silence to clients |
 | `~/music-streamer/resume.py` | Resume: resumes audio stream decoding in sync |
 | `~/music-streamer/volume.py` | Get/set/mute/unmute volume (synced with Master: `+N`/`-N`, `mute`, `unmute`, absolute `0-100`) |
@@ -57,23 +57,30 @@ All audio is decoded from YouTube (or SoundCloud/Bandcamp) via `yt-dlp` → `ffm
 Use this skill whenever the user asks to:
 - play / search / queue / shuffle / reorder music
 - stream music to remote devices (laptop, phone, browser)
+- restart / start / stop stream broadcast daemon
 - switch modes between speaker and silent (without restarting server)
 - pause / resume / stop / next / prev / previous / interrupt playback
-- move tracks or rearrange queue order
-- manage playlists (create, list, show, add, remove, delete, play, queue)
+- move tracks or rearrange queue and playlist order
+- manage playlists (create, list, show, add, remove, move, reorder, delete, play, queue)
 - adjust volume (including mute/unmute, +N/-N) or loop setting
 - check what is playing, queue status, or streaming listeners
 
-Trigger phrases: "play music", "stream music", "search music", "queue", "shuffle", "reorder", "move track", "rearrange queue", "next", "interrupt", "pause", "resume", "volume", "loop", "mode", "speaker", "silent", "stop music", "what's playing", "stream status".
+Trigger phrases: "play music", "stream music", "search music", "queue", "shuffle", "reorder", "move track", "rearrange queue", "restart server", "next", "interrupt", "pause", "resume", "volume", "loop", "mode", "speaker", "silent", "stop music", "what's playing", "stream status".
 
 ---
 
 ## How to use — AI Agent Workflow
 
-### 1. Start Stream Server (if not running)
+### 1. Start or Restart Stream Server
 ```bash
 # Start background broadcast daemon (default: silent mode, HTTP stream only)
 ~/music-streamer/stream.py --daemon --port 8000
+
+# Restart stream server daemon
+~/music-streamer/stream.py restart
+
+# Stop stream server daemon
+~/music-streamer/stream.py stop
 
 # Or start with instant worldwide public HTTPS tunnel
 ~/music-streamer/stream.py --daemon --public --port 8000
