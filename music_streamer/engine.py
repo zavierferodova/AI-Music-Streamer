@@ -216,7 +216,7 @@ class AudioEngine:
                 "-loglevel",
                 "error",
                 "-probesize",
-                "0",
+                "32",
                 "-analyzeduration",
                 "0",
                 "-fflags",
