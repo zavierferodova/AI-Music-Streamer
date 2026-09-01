@@ -16,6 +16,25 @@ Stream audio from YouTube, SoundCloud, Bandcamp, or direct URLs to your local AL
 
 ---
 
+## 📚 Project Documentation
+
+The project includes modular, comprehensive engineering documentation in the [`docs/`](file:///home/tech/music-streamer/docs/) directory:
+
+| Section | Guide | Description |
+|---|---|---|
+| **00** | [System Overview](file:///home/tech/music-streamer/docs/00-overview.md) | High-level system overview, capabilities, and topology. |
+| **01** | [Development Guide](file:///home/tech/music-streamer/docs/01-development.md) | Local environment setup, dependencies, build pipeline, testing, and debugging. |
+| **02** | [System Architecture](file:///home/tech/music-streamer/docs/02-architecture.md) | Audio pipeline, multi-sink fan-out, threading concurrency, and Unix socket IPC. |
+| **03** | [Database & State](file:///home/tech/music-streamer/docs/03-database-and-state.md) | SQLite WAL mode, schema reference, track deduplication, and fuzzy matching. |
+| **04** | [Audio Engine](file:///home/tech/music-streamer/docs/04-audio-engine.md) | PCM decoding, 50ms chunk calculations, comfort silence, ALSA sync, and seeking. |
+| **05** | [API & WebSocket](file:///home/tech/music-streamer/docs/05-api-and-websocket.md) | REST API endpoints, binary PCM WebSocket protocol, and JSON telemetry. |
+| **06** | [CLI Reference](file:///home/tech/music-streamer/docs/06-cli-reference.md) | Complete reference for all Python CLI scripts and automation flags. |
+| **07** | [Web Interface](file:///home/tech/music-streamer/docs/07-web-interface.md) | Next.js 15 frontend, Web Audio API scheduled playback, components, and UX. |
+| **08** | [Security & Auth](file:///home/tech/music-streamer/docs/08-security-and-auth.md) | Two-tier OTP authentication (Admin vs Subscriber) and session management. |
+| **09** | [Deployment & Operations](file:///home/tech/music-streamer/docs/09-deployment-and-operations.md) | Production daemon setup, systemd service, Cloudflare tunnels, and troubleshooting. |
+
+---
+
 ## Requirements & Linux System Libraries
 
 This project requires Python 3.10+ and standard Linux audio/media libraries:
