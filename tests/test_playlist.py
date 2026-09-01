@@ -203,6 +203,31 @@ class TestPlaylistManager(unittest.TestCase):
         self.assertTrue(t2.get("already_exists", False))
         self.assertEqual(self.playlist_mgr.get_playlist("Unique List")["track_count"], 1)
 
+    def test_add_tracks_bulk_and_remove_tracks_bulk(self):
+        """Verify bulk adding and bulk removing tracks in playlist."""
+        self.playlist_mgr.create_playlist("Bulk Playlist")
+
+        # 1. Bulk add tracks
+        bulk_items = [
+            {"url": "https://youtube.com/watch?v=b1", "title": "Bulk Song 1"},
+            {"url": "https://youtube.com/watch?v=b2", "title": "Bulk Song 2"},
+            {"url": "https://youtube.com/watch?v=b3", "title": "Bulk Song 3"},
+            {"url": "https://youtube.com/watch?v=b4", "title": "Bulk Song 4"},
+        ]
+        res_add = self.playlist_mgr.add_tracks_bulk("Bulk Playlist", bulk_items, auto_fetch=False)
+        self.assertTrue(res_add["success"])
+        self.assertEqual(res_add["added_count"], 4)
+        self.assertEqual(self.playlist_mgr.get_playlist("Bulk Playlist")["track_count"], 4)
+
+        # 2. Bulk remove tracks by title and 1-based index
+        res_del = self.playlist_mgr.remove_tracks_bulk("Bulk Playlist", ["Bulk Song 1", 3])
+        self.assertTrue(res_del["success"])
+        self.assertEqual(res_del["removed_count"], 2)
+        self.assertEqual(res_del["remaining_count"], 2)
+
+        remaining_titles = [t["title"] for t in self.playlist_mgr.get_playlist("Bulk Playlist")["tracks"]]
+        self.assertEqual(remaining_titles, ["Bulk Song 2", "Bulk Song 4"])
+
 
 if __name__ == "__main__":
     unittest.main()

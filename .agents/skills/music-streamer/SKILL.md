@@ -255,7 +255,13 @@ cat remove.txt | ~/music-streamer/playback.py remove-bulk - # Bulk remove from p
 ~/music-streamer/playlist.py list [--json]            # List all playlists with track counts
 ~/music-streamer/playlist.py show "Favorites" [--json]# View tracks inside playlist
 ~/music-streamer/playlist.py add "Favorites" "<URL>"  # Add track (deduplicated, auto metadata)
+~/music-streamer/playlist.py add-bulk "Favorites" "Song 1" "Song 2" # Bulk add multiple tracks
+~/music-streamer/playlist.py add-bulk "Favorites" --file /path/to/tracks.txt # Bulk add from file
+cat tracks.txt | ~/music-streamer/playlist.py add-bulk "Favorites" - # Bulk add from stdin
 ~/music-streamer/playlist.py remove "Favorites" 1     # Remove track #1 from playlist
+~/music-streamer/playlist.py remove "Favorites" 1 3 5 # Remove multiple tracks by 1-based indices
+~/music-streamer/playlist.py remove-bulk "Favorites" "Song A" "Song B" # Bulk remove tracks by titles or IDs
+~/music-streamer/playlist.py remove-bulk "Favorites" --file /path/to/remove.txt # Bulk remove from file
 ~/music-streamer/playlist.py play "Favorites"         # Load and play in sequential order
 ~/music-streamer/playlist.py play "Favorites" --shuffle # Load and play in fair shuffle mode
 ~/music-streamer/playlist.py queue "Favorites"        # Append playlist tracks to current queue

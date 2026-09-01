@@ -740,6 +740,59 @@ class TestWebServer(unittest.TestCase):
 
         conn.close()
 
+    def test_admin_playlist_add_bulk_and_remove_bulk(self):
+        """Verify REST API /api/playlist/add_bulk and remove_bulk."""
+        admin_otp = self.security.get_admin_otp()
+        _, token, _ = self.security.verify_otp(admin_otp, client_ip="127.0.0.1")
+        auth_header = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+        conn = self._get_connection()
+
+        # 1. Create playlist
+        conn.request("POST", "/api/playlist/create", body=json.dumps({"name": "Bulk Web PL"}), headers=auth_header)
+        resp = conn.getresponse()
+        self.assertEqual(resp.status, 200)
+        resp.read()
+
+        # 2. Add bulk
+        conn.request(
+            "POST",
+            "/api/playlist/add_bulk",
+            body=json.dumps({
+                "playlist": "Bulk Web PL",
+                "tracks": [
+                    {"url": "https://youtube.com/watch?v=w1", "title": "Web Song 1"},
+                    {"url": "https://youtube.com/watch?v=w2", "title": "Web Song 2"},
+                    {"url": "https://youtube.com/watch?v=w3", "title": "Web Song 3"},
+                ],
+            }),
+            headers=auth_header,
+        )
+        resp_add = conn.getresponse()
+        self.assertEqual(resp_add.status, 200)
+        data_add = json.loads(resp_add.read().decode("utf-8"))
+        self.assertTrue(data_add["success"])
+        self.assertEqual(data_add["added_count"], 3)
+
+        # 3. Remove bulk
+        conn.request(
+            "POST",
+            "/api/playlist/remove_bulk",
+            body=json.dumps({
+                "playlist": "Bulk Web PL",
+                "items": ["Web Song 1", 3],
+            }),
+            headers=auth_header,
+        )
+        resp_rem = conn.getresponse()
+        self.assertEqual(resp_rem.status, 200)
+        data_rem = json.loads(resp_rem.read().decode("utf-8"))
+        self.assertTrue(data_rem["success"])
+        self.assertEqual(data_rem["removed_count"], 2)
+        self.assertEqual(data_rem["remaining_count"], 1)
+
+        conn.close()
+
 
 if __name__ == "__main__":
     unittest.main()

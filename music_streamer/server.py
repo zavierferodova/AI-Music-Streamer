@@ -1083,28 +1083,54 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             self.server.ws_hub.broadcast()
             self._send_json({"status": "ok" if ok else "error", "deleted": ok})
 
+        elif path in ["/api/playlist/add_bulk", "/api/playlist/bulk_add"]:
+            target = payload.get("playlist") or payload.get("name") or payload.get("id")
+            items = payload.get("tracks") or payload.get("items") or []
+            res = self.server.playlist_mgr.add_tracks_bulk(target, items)
+            self.server.ws_hub.broadcast()
+            self._send_json(res)
+
+        elif path in ["/api/playlist/remove_bulk", "/api/playlist/bulk_remove"]:
+            target = payload.get("playlist") or payload.get("name") or payload.get("id")
+            items = payload.get("items") or payload.get("ids") or payload.get("indices") or payload.get("tracks") or []
+            res = self.server.playlist_mgr.remove_tracks_bulk(target, items)
+            self.server.ws_hub.broadcast()
+            self._send_json(res)
+
         elif path == "/api/playlist/add":
             target = payload.get("playlist") or payload.get("name") or payload.get("id")
-            url = payload.get("url")
-            title = payload.get("title", "")
-            t = self.server.playlist_mgr.add_track(target, url=url, title=title)
-            self.server.ws_hub.broadcast()
-            if t and t.get("already_exists"):
-                self._send_json({
-                    "status": "already_exists",
-                    "already_exists": True,
-                    "message": f"Track already exists in playlist: {t.get('title', url)}",
-                    "track": t,
-                })
+            items = payload.get("tracks") or payload.get("items")
+            if items and isinstance(items, list):
+                res = self.server.playlist_mgr.add_tracks_bulk(target, items)
+                self.server.ws_hub.broadcast()
+                self._send_json(res)
             else:
-                self._send_json({"status": "ok", "already_exists": False, "track": t})
+                url = payload.get("url")
+                title = payload.get("title", "")
+                t = self.server.playlist_mgr.add_track(target, url=url, title=title)
+                self.server.ws_hub.broadcast()
+                if t and t.get("already_exists"):
+                    self._send_json({
+                        "status": "already_exists",
+                        "already_exists": True,
+                        "message": f"Track already exists in playlist: {t.get('title', url)}",
+                        "track": t,
+                    })
+                else:
+                    self._send_json({"status": "ok", "already_exists": False, "track": t})
 
         elif path == "/api/playlist/remove":
             target = payload.get("playlist") or payload.get("name") or payload.get("id")
-            idx = payload.get("index") if payload.get("index") is not None else payload.get("id")
-            ok = self.server.playlist_mgr.remove_track(target, idx)
-            self.server.ws_hub.broadcast()
-            self._send_json({"status": "ok" if ok else "error", "removed": ok})
+            items = payload.get("items") or payload.get("ids") or payload.get("indices") or payload.get("tracks")
+            if items and isinstance(items, list):
+                res = self.server.playlist_mgr.remove_tracks_bulk(target, items)
+                self.server.ws_hub.broadcast()
+                self._send_json(res)
+            else:
+                idx = payload.get("index") if payload.get("index") is not None else payload.get("id")
+                ok = self.server.playlist_mgr.remove_track(target, idx)
+                self.server.ws_hub.broadcast()
+                self._send_json({"status": "ok" if ok else "error", "removed": ok})
 
         elif path == "/api/playlist/play":
             target = payload.get("playlist") or payload.get("name") or payload.get("id")

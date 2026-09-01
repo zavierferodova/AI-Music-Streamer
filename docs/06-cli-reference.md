@@ -203,8 +203,10 @@ Manages persistent named collections stored permanently in the SQLite database.
 | `create "<NAME>"` | Creates a new empty playlist. |
 | `rename "<OLD>" "<NEW>"` | Renames an existing playlist. |
 | `show "<NAME>" [--json]` | Displays all tracks in a playlist. |
-| `add "<NAME>" "<URL_OR_QUERY>"` | Adds track to named playlist (auto-fetches metadata). |
-| `remove "<NAME>" <INDEX>` | Removes track at 1-based index from playlist. |
+| `add "<NAME>" "<URL_OR_QUERY...>"` | Adds one or more tracks to named playlist (auto-fetches metadata). |
+| `add-bulk "<NAME>" <TRACKS...> [--file FILE]` | Adds multiple tracks in bulk (supports positional arguments, `--file <txt/json>`, stdin `-`). |
+| `remove "<NAME>" <INDEX_OR_ID...>` | Removes one or more tracks at 1-based indices, IDs, or titles from playlist. |
+| `remove-bulk "<NAME>" <ITEMS...> [--file FILE]` | Removes multiple tracks simultaneously from playlist (supports `--file <txt/json>`, stdin `-`). |
 | `play "<NAME>" [--shuffle]` | Loads playlist into queue and starts playback. |
 | `queue "<NAME>"` | Appends playlist tracks to existing playback queue. |
 | `delete "<NAME>"` | Deletes a playlist and its track associations. |

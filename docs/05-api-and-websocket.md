@@ -214,6 +214,12 @@ Creates a new persistent playlist: `{"name": "Favorites"}`.
 #### `POST /api/playlist/add`
 Adds a track to a named playlist: `{"name": "Favorites", "url": "https://...", "title": "..."}`.
 
+#### `POST /api/playlist/add_bulk`
+Adds multiple tracks to a named playlist: `{"playlist": "Favorites", "tracks": ["https://...", "Song 2"]}`.
+
+#### `POST /api/playlist/remove_bulk`
+Removes multiple tracks from a named playlist: `{"playlist": "Favorites", "items": [1, 3, "Song B"]}`.
+
 #### `POST /api/playlist/play`
 Loads a playlist into the playback queue and begins playback: `{"name": "Favorites", "shuffle": false}`.
 

@@ -284,8 +284,14 @@ def build_playlist_parser() -> argparse.ArgumentParser:
             "show",
             "view",
             "add",
+            "add-bulk",
+            "add-many",
+            "bulk-add",
             "remove",
             "rm",
+            "remove-bulk",
+            "rm-bulk",
+            "remove-many",
             "del-track",
             "delete",
             "drop",
@@ -296,6 +302,7 @@ def build_playlist_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("playlist", nargs="?", help="Playlist name or ID")
     parser.add_argument("target", nargs="*", help="Track URL, search query, or track index")
+    parser.add_argument("--file", "-f", help="Path to text or JSON file containing tracks to add/remove in bulk")
     parser.add_argument("-s", "--shuffle", action="store_true", help="Play/Queue in shuffle mode")
     parser.add_argument("-j", "--json", action="store_true", help="Output in JSON format")
     return parser
@@ -1212,37 +1219,171 @@ def handle_playlist(args: argparse.Namespace) -> int:
         print("═" * 60)
         return 0
 
-    elif cmd == "add":
-        if not pl_name or not targets:
-            print("Usage: playlist.py add <NAME> <URL|query>", file=sys.stderr)
-            return 1
-        inp = " ".join(targets)
-        try:
-            print(f"Adding to playlist '{pl_name}': {inp}")
-            t = playlist_mgr.add_track(pl_name, inp)
-            if t and t.get("already_exists"):
-                print(f"⚠️ Track already exists in playlist '{pl_name}': {t['title']}")
-            else:
-                print(f"✓ Added to '{pl_name}': {t['title']}")
-            send_ipc_command({"action": "playlist_update"})
-            return 0
-        except Exception as e:
-            print(f"Error: {e}", file=sys.stderr)
+    elif cmd in ["add", "add-bulk", "add-many", "bulk-add"]:
+        if not pl_name:
+            print("Usage: playlist.py add <NAME> <URL|query...> [--file FILE]", file=sys.stderr)
             return 1
 
-    elif cmd in ["remove", "rm", "del-track"]:
-        if not pl_name or not targets:
-            print("Usage: playlist.py remove <NAME> <INDEX|ID>", file=sys.stderr)
+        items_to_add: List[Any] = []
+
+        # 1. From file if specified
+        file_path = getattr(args, "file", None)
+        if file_path:
+            p = Path(file_path).expanduser().resolve()
+            if not p.exists():
+                print(f"Error: File not found: {file_path}", file=sys.stderr)
+                return 1
+            content = p.read_text(encoding="utf-8").strip()
+            if content.startswith("[") and content.endswith("]"):
+                try:
+                    parsed = json.loads(content)
+                    if isinstance(parsed, list):
+                        items_to_add.extend(parsed)
+                except Exception:
+                    for line in content.splitlines():
+                        if line.strip() and not line.strip().startswith("#"):
+                            items_to_add.append(line.strip())
+            else:
+                for line in content.splitlines():
+                    if line.strip() and not line.strip().startswith("#"):
+                        items_to_add.append(line.strip())
+
+        # 2. From stdin if target is '-'
+        if targets and targets[0] == "-":
+            stdin_content = sys.stdin.read().strip()
+            if stdin_content.startswith("[") and stdin_content.endswith("]"):
+                try:
+                    parsed = json.loads(stdin_content)
+                    if isinstance(parsed, list):
+                        items_to_add.extend(parsed)
+                except Exception:
+                    for line in stdin_content.splitlines():
+                        if line.strip() and not line.strip().startswith("#"):
+                            items_to_add.append(line.strip())
+            else:
+                for line in stdin_content.splitlines():
+                    if line.strip() and not line.strip().startswith("#"):
+                        items_to_add.append(line.strip())
+
+        # 3. From CLI positional targets
+        elif targets:
+            joined = " ".join(targets)
+            if joined.startswith("[") and joined.endswith("]"):
+                try:
+                    parsed = json.loads(joined)
+                    if isinstance(parsed, list):
+                        items_to_add.extend(parsed)
+                except Exception:
+                    items_to_add.extend(targets)
+            elif cmd in ["add-bulk", "add-many", "bulk-add"]:
+                items_to_add.extend(targets)
+            else:
+                # If cmd is 'add' and multiple targets are distinct URLs/queries
+                items_to_add.append(joined)
+
+        if not items_to_add:
+            print("Usage: playlist.py add <NAME> <URL|query...> (e.g. playlist.py add 'Favorites' 'Song 1', playlist.py add-bulk 'Favorites' 'Song 1' 'Song 2')", file=sys.stderr)
             return 1
-        target_val = targets[0]
-        idx = int(target_val) - 1 if target_val.isdigit() else target_val
-        ok = playlist_mgr.remove_track(pl_name, idx)
-        if ok:
-            print(f"✓ Removed track from playlist '{pl_name}'")
+
+        res = playlist_mgr.add_tracks_bulk(pl_name, items_to_add)
+        if not res.get("success"):
+            print(f"Error: {res.get('error', 'Failed to add tracks')}", file=sys.stderr)
+            return 1
+
+        added = res.get("tracks", [])
+        added_count = res.get("added_count", 0)
+        exists_count = res.get("already_exists_count", 0)
+        print(f"✓ Added {added_count} track(s) to playlist '{res.get('playlist', pl_name)}' (New: {added_count - exists_count}, Existing: {exists_count})")
+        for t in added:
+            dup_tag = " (already existed)" if t.get("already_exists") else ""
+            print(f"   - 🎵 {t['title']}{dup_tag}")
+        send_ipc_command({"action": "playlist_update"})
+        if args.json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+        return 0
+
+    elif cmd in ["remove", "rm", "del-track", "remove-bulk", "rm-bulk", "remove-many"]:
+        if not pl_name:
+            print("Usage: playlist.py remove <NAME> <INDEX|ID|TITLE...> [--file FILE]", file=sys.stderr)
+            return 1
+
+        items_to_remove: List[Any] = []
+
+        # 1. From file if specified
+        file_path = getattr(args, "file", None)
+        if file_path:
+            p = Path(file_path).expanduser().resolve()
+            if not p.exists():
+                print(f"Error: File not found: {file_path}", file=sys.stderr)
+                return 1
+            content = p.read_text(encoding="utf-8").strip()
+            if content.startswith("[") and content.endswith("]"):
+                try:
+                    parsed = json.loads(content)
+                    if isinstance(parsed, list):
+                        items_to_remove.extend(parsed)
+                except Exception:
+                    for line in content.splitlines():
+                        if line.strip() and not line.strip().startswith("#"):
+                            items_to_remove.append(line.strip())
+            else:
+                for line in content.splitlines():
+                    if line.strip() and not line.strip().startswith("#"):
+                        items_to_remove.append(line.strip())
+
+        # 2. From stdin if target is '-'
+        if targets and targets[0] == "-":
+            stdin_content = sys.stdin.read().strip()
+            if stdin_content.startswith("[") and stdin_content.endswith("]"):
+                try:
+                    parsed = json.loads(stdin_content)
+                    if isinstance(parsed, list):
+                        items_to_remove.extend(parsed)
+                except Exception:
+                    for line in stdin_content.splitlines():
+                        if line.strip() and not line.strip().startswith("#"):
+                            items_to_remove.append(line.strip())
+            else:
+                for line in stdin_content.splitlines():
+                    if line.strip() and not line.strip().startswith("#"):
+                        items_to_remove.append(line.strip())
+
+        # 3. From CLI positional targets
+        elif targets:
+            joined = " ".join(targets)
+            if joined.startswith("[") and joined.endswith("]"):
+                try:
+                    parsed = json.loads(joined)
+                    if isinstance(parsed, list):
+                        items_to_remove.extend(parsed)
+                except Exception:
+                    for t in targets:
+                        for piece in str(t).split(","):
+                            p = piece.strip()
+                            if p:
+                                items_to_remove.append(p)
+            else:
+                for t in targets:
+                    for piece in str(t).split(","):
+                        p = piece.strip()
+                        if p:
+                            items_to_remove.append(p)
+
+        if not items_to_remove:
+            print("Usage: playlist.py remove <NAME> <INDEX|ID|TITLE...> (e.g. playlist.py remove 'Favorites' 1 3, playlist.py remove-bulk 'Favorites' 'Song A' 'Song B')", file=sys.stderr)
+            return 1
+
+        res = playlist_mgr.remove_tracks_bulk(pl_name, items_to_remove)
+        if res.get("success"):
+            print(f"✓ Removed {res.get('removed_count', 0)} track(s) from playlist '{res.get('playlist', pl_name)}' (Remaining: {res.get('remaining_count', 0)})")
+            for t in res.get("removed_tracks", []):
+                print(f"   - 🗑️ {t['title']}")
             send_ipc_command({"action": "playlist_update"})
+            if args.json:
+                print(json.dumps(res, indent=2, ensure_ascii=False))
             return 0
         else:
-            print(f"Error: track '{target_val}' not found in playlist '{pl_name}'", file=sys.stderr)
+            print(f"Error: {res.get('error', 'Failed to remove track(s)')}", file=sys.stderr)
             return 1
 
     elif cmd in ["delete", "drop"]:

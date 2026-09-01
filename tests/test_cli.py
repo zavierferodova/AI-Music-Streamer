@@ -175,6 +175,17 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(args_play.playlist, "Favorites")
         self.assertTrue(args_play.shuffle)
 
+        args_add_bulk = parser.parse_args(["add-bulk", "Favorites", "Song 1", "Song 2", "--file", "tracks.txt"])
+        self.assertEqual(args_add_bulk.command, "add-bulk")
+        self.assertEqual(args_add_bulk.playlist, "Favorites")
+        self.assertEqual(args_add_bulk.target, ["Song 1", "Song 2"])
+        self.assertEqual(args_add_bulk.file, "tracks.txt")
+
+        args_rm_bulk = parser.parse_args(["remove-bulk", "Favorites", "1", "3", "5"])
+        self.assertEqual(args_rm_bulk.command, "remove-bulk")
+        self.assertEqual(args_rm_bulk.playlist, "Favorites")
+        self.assertEqual(args_rm_bulk.target, ["1", "3", "5"])
+
 
 if __name__ == "__main__":
     unittest.main()
