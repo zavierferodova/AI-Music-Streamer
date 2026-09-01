@@ -83,12 +83,27 @@ export function NowPlayingHero({
   const [localElapsed, setLocalElapsed] = useState(serverElapsed);
   const lastSyncTimeRef = useRef(Date.now());
   const baseElapsedRef = useRef(serverElapsed);
+  const pendingSeekRef = useRef<number | null>(null);
+  const lastSeekTimeRef = useRef<number>(0);
+  const isCommittingRef = useRef<boolean>(false);
 
   useEffect(() => {
+    // If user recently seeked, ignore in-flight stale server elapsed
+    if (pendingSeekRef.current !== null) {
+      const timeSinceSeek = Date.now() - lastSeekTimeRef.current;
+      if (status?.is_buffering || Math.abs(serverElapsed - pendingSeekRef.current) <= 2 || timeSinceSeek > 3000) {
+        pendingSeekRef.current = null;
+        baseElapsedRef.current = serverElapsed;
+        lastSyncTimeRef.current = Date.now();
+        setLocalElapsed(serverElapsed);
+      }
+      return;
+    }
+
     baseElapsedRef.current = serverElapsed;
     lastSyncTimeRef.current = Date.now();
     setLocalElapsed(serverElapsed);
-  }, [serverElapsed]);
+  }, [serverElapsed, status?.is_buffering]);
 
   useEffect(() => {
     if (!isPlaying || isBuffering || !status?.now_playing?.url) {
@@ -114,19 +129,51 @@ export function NowPlayingHero({
   }, [localElapsed, isScrubbing]);
 
   const currentDisplayElapsed = isScrubbing ? scrubValue : localElapsed;
-  const effectiveDuration = duration > 0 ? duration : (isPlaying || isPaused ? Math.max(localElapsed + 60, 300) : 0);
-  const progressPercent = effectiveDuration > 0 ? Math.min(100, Math.max(0, (currentDisplayElapsed / effectiveDuration) * 100)) : 0;
+  const effectiveDuration = duration > 0 ? duration : isPlaying || isPaused ? Math.max(localElapsed + 60, 300) : 0;
+  const progressPercent =
+    effectiveDuration > 0 ? Math.min(100, Math.max(0, (currentDisplayElapsed / effectiveDuration) * 100)) : 0;
 
   const handleSeekInput = (val: number) => {
     setIsScrubbing(true);
     setScrubValue(val);
   };
 
-  const handleSeekCommit = () => {
+  const handleSeekCommit = (overrideVal?: number) => {
+    if (isCommittingRef.current) return;
+    isCommittingRef.current = true;
+    setTimeout(() => {
+      isCommittingRef.current = false;
+    }, 300);
+
     setIsScrubbing(false);
+    const targetVal = typeof overrideVal === "number" ? overrideVal : scrubValue;
+
+    // Optimistic local update so timeline never jumps backward to stale pre-seek time
+    setLocalElapsed(targetVal);
+    baseElapsedRef.current = targetVal;
+    lastSyncTimeRef.current = Date.now();
+    pendingSeekRef.current = targetVal;
+    lastSeekTimeRef.current = Date.now();
+
     if (onSeekTo) {
-      onSeekTo(scrubValue);
-      showToast(`Seeked to ${formatSeconds(scrubValue)}`, "info", "fast_forward");
+      onSeekTo(targetVal);
+      showToast(`Seeked to ${formatSeconds(targetVal)}`, "info", "fast_forward");
+    }
+  };
+
+  const handleSeekStep = (delta: number) => {
+    const targetVal = Math.max(
+      0,
+      duration > 0 ? Math.min(duration, currentDisplayElapsed + delta) : currentDisplayElapsed + delta
+    );
+    setLocalElapsed(targetVal);
+    baseElapsedRef.current = targetVal;
+    lastSyncTimeRef.current = Date.now();
+    pendingSeekRef.current = targetVal;
+    lastSeekTimeRef.current = Date.now();
+
+    if (onSeekRelative) {
+      onSeekRelative(delta);
     }
   };
 
@@ -286,13 +333,11 @@ export function NowPlayingHero({
                 step="1"
                 value={currentDisplayElapsed}
                 onPointerDown={() => setIsScrubbing(true)}
-                onMouseDown={() => setIsScrubbing(true)}
-                onTouchStart={() => setIsScrubbing(true)}
                 onInput={(e) => handleSeekInput(Number((e.target as HTMLInputElement).value))}
-                onChange={(e) => handleSeekInput(Number(e.target.value))}
-                onPointerUp={handleSeekCommit}
-                onMouseUp={handleSeekCommit}
-                onTouchEnd={handleSeekCommit}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  handleSeekCommit(val);
+                }}
                 onKeyUp={(e) => {
                   if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
                     handleSeekCommit();
@@ -325,7 +370,7 @@ export function NowPlayingHero({
 
             <div className="flex items-center gap-1.5">
               <button
-                onClick={() => onSeekRelative?.(-30)}
+                onClick={() => handleSeekStep(-30)}
                 className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-all hover:scale-105 active:scale-95"
                 title="Rewind 30 seconds"
               >
@@ -333,7 +378,7 @@ export function NowPlayingHero({
                 <span>-30s</span>
               </button>
               <button
-                onClick={() => onSeekRelative?.(-10)}
+                onClick={() => handleSeekStep(-10)}
                 className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-all hover:scale-105 active:scale-95"
                 title="Rewind 10 seconds"
               >
@@ -341,7 +386,7 @@ export function NowPlayingHero({
                 <span>-10s</span>
               </button>
               <button
-                onClick={() => onSeekRelative?.(10)}
+                onClick={() => handleSeekStep(10)}
                 className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-all hover:scale-105 active:scale-95"
                 title="Forward 10 seconds"
               >
@@ -349,7 +394,7 @@ export function NowPlayingHero({
                 <RotateCw className="w-3 h-3 text-sky-400" />
               </button>
               <button
-                onClick={() => onSeekRelative?.(30)}
+                onClick={() => handleSeekStep(30)}
                 className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-all hover:scale-105 active:scale-95"
                 title="Forward 30 seconds"
               >
