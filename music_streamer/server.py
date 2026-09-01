@@ -718,6 +718,22 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             idx = payload.get("index")
             track_id = payload.get("id")
             mgr.remove_track(track_id if track_id is not None else idx)
+        elif action in ["playback_move", "queue_move"]:
+            from_idx = payload.get("from_index")
+            to_idx = payload.get("to_index")
+            if from_idx is not None and to_idx is not None:
+                mgr.move_track(int(from_idx), int(to_idx))
+        elif action in ["playback_reorder", "queue_reorder"]:
+            track_ids = payload.get("track_ids")
+            indices = payload.get("indices")
+            from_idx = payload.get("from_index")
+            to_idx = payload.get("to_index")
+            if track_ids and isinstance(track_ids, list):
+                mgr.reorder_tracks(track_ids)
+            elif indices and isinstance(indices, list):
+                mgr.reorder_by_indices([int(i) for i in indices])
+            elif from_idx is not None and to_idx is not None:
+                mgr.move_track(int(from_idx), int(to_idx))
         elif action in ["playback_add", "queue_add"]:
             url = payload.get("url")
             title = payload.get("title") or ""
@@ -931,6 +947,31 @@ class StreamRequestHandler(http.server.BaseHTTPRequestHandler):
             track_id = payload.get("id")
             mgr.remove_track(track_id if track_id is not None else idx)
             self._send_json({"status": "ok", "action": "remove"})
+
+        elif path in ["/api/playback/move", "/api/queue/move"]:
+            from_idx = payload.get("from_index")
+            to_idx = payload.get("to_index")
+            if from_idx is None or to_idx is None:
+                self._send_json({"status": "error", "error": "Missing from_index or to_index"})
+            else:
+                ok = mgr.move_track(int(from_idx), int(to_idx))
+                self.server.ws_hub.broadcast()
+                self._send_json({"status": "ok" if ok else "error", "moved": ok})
+
+        elif path in ["/api/playback/reorder", "/api/queue/reorder"]:
+            track_ids = payload.get("track_ids")
+            indices = payload.get("indices")
+            from_idx = payload.get("from_index")
+            to_idx = payload.get("to_index")
+            ok = False
+            if track_ids and isinstance(track_ids, list):
+                ok = mgr.reorder_tracks(track_ids)
+            elif indices and isinstance(indices, list):
+                ok = mgr.reorder_by_indices([int(i) for i in indices])
+            elif from_idx is not None and to_idx is not None:
+                ok = mgr.move_track(int(from_idx), int(to_idx))
+            self.server.ws_hub.broadcast()
+            self._send_json({"status": "ok" if ok else "error", "reordered": ok})
 
         elif path in ["/api/playback/shuffle", "/api/queue/shuffle"]:
             target_mode = mgr.shuffle_unplayed_tracks()

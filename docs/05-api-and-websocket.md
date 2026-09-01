@@ -132,6 +132,27 @@ Removes a track from the playback list by ID or index.
 }
 ```
 
+#### `POST /api/playback/move`
+Moves a track from `from_index` to `to_index` (0-based) in the playback list.
+
+**Request Payload:**
+```json
+{
+  "from_index": 3,
+  "to_index": 0
+}
+```
+
+#### `POST /api/playback/reorder`
+Reorders the active playback list by custom track ID list or index permutation.
+
+**Request Payload:**
+```json
+{
+  "track_ids": ["1725178200000_3", "1725178200000_1", "1725178200000_2"]
+}
+```
+
 #### `POST /api/playback/shuffle`
 Randomizes unplayed queued tracks while preserving played history.
 

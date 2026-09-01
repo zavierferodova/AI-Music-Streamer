@@ -51,6 +51,18 @@ class TestCLI(unittest.TestCase):
         args_prev = parser.parse_args(["prev"])
         self.assertEqual(args_prev.command, "prev")
 
+        args_move = parser.parse_args(["move", "4", "1"])
+        self.assertEqual(args_move.command, "move")
+        self.assertEqual(args_move.target, ["4", "1"])
+
+        args_mv = parser.parse_args(["mv", "2", "3"])
+        self.assertEqual(args_mv.command, "mv")
+        self.assertEqual(args_mv.target, ["2", "3"])
+
+        args_reorder = parser.parse_args(["reorder", "3", "1", "2", "4"])
+        self.assertEqual(args_reorder.command, "reorder")
+        self.assertEqual(args_reorder.target, ["3", "1", "2", "4"])
+
     def test_volume_parser(self):
         """Verify volume CLI arguments."""
         parser = build_volume_parser()

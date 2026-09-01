@@ -313,16 +313,48 @@ class TestWebServer(unittest.TestCase):
         self.assertEqual(resp.status, 200)
         self.assertEqual(json.loads(resp.read().decode("utf-8"))["mode"], "speaker")
 
-        # POST /api/playback/add
+        # POST /api/playback/add (add 2 tracks)
         conn.request(
             "POST",
             "/api/playback/add",
-            body=json.dumps({"url": "https://youtube.com/watch?v=abc", "title": "Web Song"}),
+            body=json.dumps({"url": "https://youtube.com/watch?v=abc1", "title": "Song 1"}),
             headers=auth_header,
         )
         resp = conn.getresponse()
         self.assertEqual(resp.status, 200)
         resp.read()
+
+        conn.request(
+            "POST",
+            "/api/playback/add",
+            body=json.dumps({"url": "https://youtube.com/watch?v=abc2", "title": "Song 2"}),
+            headers=auth_header,
+        )
+        resp = conn.getresponse()
+        self.assertEqual(resp.status, 200)
+        resp.read()
+
+        # POST /api/playback/move (move Song 2 from index 1 to 0)
+        conn.request(
+            "POST",
+            "/api/playback/move",
+            body=json.dumps({"from_index": 1, "to_index": 0}),
+            headers=auth_header,
+        )
+        resp = conn.getresponse()
+        self.assertEqual(resp.status, 200)
+        self.assertTrue(json.loads(resp.read().decode("utf-8"))["moved"])
+
+        # POST /api/playback/reorder
+        conn.request(
+            "POST",
+            "/api/playback/reorder",
+            body=json.dumps({"indices": [1, 0]}),
+            headers=auth_header,
+        )
+        resp = conn.getresponse()
+        self.assertEqual(resp.status, 200)
+        self.assertTrue(json.loads(resp.read().decode("utf-8"))["reordered"])
 
         # POST /api/playback/shuffle
         conn.request("POST", "/api/playback/shuffle", body=json.dumps({}), headers=auth_header)

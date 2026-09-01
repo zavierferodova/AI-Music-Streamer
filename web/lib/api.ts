@@ -230,12 +230,42 @@ export async function searchMusic(query: string, count: number = 6, includeWeb: 
   }
 }
 
+export async function reorderPlaybackTracks(trackIds: string[]): Promise<boolean> {
+  try {
+    const res = await fetch("/api/playback/reorder", {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ track_ids: trackIds }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.error("reorderPlaybackTracks error:", err);
+    return false;
+  }
+}
+
+export async function movePlaybackTrack(fromIndex: number, toIndex: number): Promise<boolean> {
+  try {
+    const res = await fetch("/api/playback/move", {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ from_index: fromIndex, to_index: toIndex }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.error("movePlaybackTrack error:", err);
+    return false;
+  }
+}
+
 export async function postApiFallback(action: string, payload: Record<string, any> = {}): Promise<boolean> {
   let endpoint = `/api/${action}`;
   if (action === "playback_add" || action === "queue_add") endpoint = "/api/playback/add";
   else if (action === "playback_clear" || action === "queue_clear") endpoint = "/api/playback/clear";
   else if (action === "playback_play" || action === "queue_play" || action === "interrupt") endpoint = "/api/playback/play";
   else if (action === "playback_remove" || action === "queue_remove") endpoint = "/api/playback/remove";
+  else if (action === "playback_move" || action === "queue_move") endpoint = "/api/playback/move";
+  else if (action === "playback_reorder" || action === "queue_reorder") endpoint = "/api/playback/reorder";
   else if (action === "playback_mode" || action === "queue_mode") endpoint = "/api/playback/mode";
   else if (action === "playback_shuffle") endpoint = "/api/playback/shuffle";
   else if (action === "playback_reset_history") endpoint = "/api/playback/reset_history";
@@ -253,3 +283,4 @@ export async function postApiFallback(action: string, payload: Record<string, an
     return false;
   }
 }
+

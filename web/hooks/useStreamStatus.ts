@@ -210,6 +210,20 @@ export function useStreamStatus() {
     [sendCommand, showToast]
   );
 
+  const movePlaybackTrack = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      sendCommand({ action: "playback_move", from_index: fromIndex, to_index: toIndex });
+    },
+    [sendCommand]
+  );
+
+  const reorderPlaybackTracks = useCallback(
+    (trackIds: string[]) => {
+      sendCommand({ action: "playback_reorder", track_ids: trackIds });
+    },
+    [sendCommand]
+  );
+
   const dismissPlaybackError = useCallback(() => {
     sendCommand({ action: "dismiss_error" });
   }, [sendCommand]);
@@ -309,6 +323,8 @@ export function useStreamStatus() {
     interruptPlay,
     playTrackAtIndex,
     removeTrackFromPlayback,
+    movePlaybackTrack,
+    reorderPlaybackTracks,
     dismissPlaybackError,
     retryCurrentTrack,
     handleVolumeChange,

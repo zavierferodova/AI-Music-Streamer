@@ -136,6 +136,51 @@ class TestPlaybackManager(unittest.TestCase):
         self.assertEqual(played2["title"], "Song 2")
         self.assertEqual(self.playback.get_state()["now_playing"]["title"], "Song 2")
 
+    def test_replay_shifting_order_and_played_status(self):
+        """Verify that replaying a track marks currently playing song as played and shifts the replayed track to playing."""
+        t1 = self.playback.add_track("https://youtube.com/watch?v=1", "Song 1")
+        t2 = self.playback.add_track("https://youtube.com/watch?v=2", "Song 2")
+        t3 = self.playback.add_track("https://youtube.com/watch?v=3", "Song 3")
+        t4 = self.playback.add_track("https://youtube.com/watch?v=4", "Song 4")
+
+        # 1. Play Song 1
+        self.playback.play_track_by_id(t1["id"])
+        state = self.playback.get_state()
+        self.assertEqual(state["now_playing"]["title"], "Song 1")
+        self.assertEqual(state["played_count"], 0)
+        self.assertEqual(state["queued_count"], 3)
+
+        # 2. Advance to Song 2 (Song 1 becomes played, Song 2 is playing)
+        self.playback.play_track_by_id(t2["id"])
+        state = self.playback.get_state()
+        self.assertEqual(state["now_playing"]["title"], "Song 2")
+        self.assertEqual(state["played_count"], 1)
+        self.assertEqual(state["played_tracks"][0]["title"], "Song 1")
+        self.assertEqual(state["queued_count"], 2)
+
+        # 3. Advance to Song 3 (Song 1 and Song 2 are played, Song 3 is playing)
+        self.playback.play_track_by_id(t3["id"])
+        state = self.playback.get_state()
+        self.assertEqual(state["now_playing"]["title"], "Song 3")
+        self.assertEqual(state["played_count"], 2)
+        self.assertEqual([t["title"] for t in state["played_tracks"]], ["Song 1", "Song 2"])
+        self.assertEqual([t["title"] for t in state["queued_tracks"]], ["Song 4"])
+
+        # 4. Now click REPLAY on Song 1 (which was in played history at index 0)
+        # Expected:
+        # - Song 3 (which was playing) becomes 'played'.
+        # - Played tracks: [Song 2, Song 3].
+        # - Now Playing: Song 1 (shifted to active playing position).
+        # - Queued tracks: [Song 4].
+        replayed = self.playback.play_track_by_id(t1["id"])
+        self.assertEqual(replayed["title"], "Song 1")
+        state = self.playback.get_state()
+        self.assertEqual(state["now_playing"]["title"], "Song 1")
+        self.assertEqual(state["played_count"], 2)
+        self.assertEqual([t["title"] for t in state["played_tracks"]], ["Song 2", "Song 3"])
+        self.assertEqual([t["title"] for t in state["queued_tracks"]], ["Song 4"])
+        self.assertEqual([t["title"] for t in state["tracks"]], ["Song 2", "Song 3", "Song 1", "Song 4"])
+
     def test_remove_track(self):
         """Verify removing tracks by index or ID."""
         t1 = self.playback.add_track("https://youtube.com/watch?v=1", "Song 1")
@@ -150,6 +195,99 @@ class TestPlaybackManager(unittest.TestCase):
         # Remove by ID
         self.assertTrue(self.playback.remove_track(t2["id"]))
         self.assertEqual(self.playback.get_state()["total_count"], 0)
+
+    def test_move_track(self):
+        """Verify moving a track from one position to another in playback list."""
+        t1 = self.playback.add_track("https://youtube.com/watch?v=1", "Song 1")
+        t2 = self.playback.add_track("https://youtube.com/watch?v=2", "Song 2")
+        t3 = self.playback.add_track("https://youtube.com/watch?v=3", "Song 3")
+        t4 = self.playback.add_track("https://youtube.com/watch?v=4", "Song 4")
+
+        # Move Song 4 (index 3) to position 0
+        self.assertTrue(self.playback.move_track(3, 0))
+        state = self.playback.get_state()
+        titles = [t["title"] for t in state["tracks"]]
+        self.assertEqual(titles, ["Song 4", "Song 1", "Song 2", "Song 3"])
+
+        # Move Song 1 (index 1) to position 3 (end)
+        self.assertTrue(self.playback.move_track(1, 3))
+        state = self.playback.get_state()
+        titles = [t["title"] for t in state["tracks"]]
+        self.assertEqual(titles, ["Song 4", "Song 2", "Song 3", "Song 1"])
+
+        # Move same index (no-op)
+        self.assertTrue(self.playback.move_track(2, 2))
+
+        # Invalid index returns False
+        self.assertFalse(self.playback.move_track(10, 0))
+        self.assertFalse(self.playback.move_track(0, -1))
+
+    def test_move_track_locked_when_played(self):
+        """Verify that played tracks cannot be moved and queued moves cannot precede played tracks."""
+        t1 = self.playback.add_track("https://youtube.com/watch?v=1", "Song 1")
+        t2 = self.playback.add_track("https://youtube.com/watch?v=2", "Song 2")
+        t3 = self.playback.add_track("https://youtube.com/watch?v=3", "Song 3")
+
+        # Mark Song 1 as played
+        self.playback.db.update_track_status(t1["id"], "played")
+
+        # Attempt to move played track Song 1 -> returns False
+        self.assertFalse(self.playback.move_track(0, 1))
+        self.assertFalse(self.playback.move_track(0, 2))
+
+        # Move Song 3 (index 2) to index 0 -> clamped to index 1 (after played Song 1)
+        self.assertTrue(self.playback.move_track(2, 0))
+        state = self.playback.get_state()
+        titles = [t["title"] for t in state["tracks"]]
+        self.assertEqual(titles, ["Song 1", "Song 3", "Song 2"])
+        self.assertEqual(state["tracks"][0]["status"], "played")
+
+    def test_reorder_queued_tracks_slice(self):
+        """Verify reordering only the queued tracks slice while leaving played tracks intact."""
+        t1 = self.playback.add_track("https://youtube.com/watch?v=1", "Song 1")
+        t2 = self.playback.add_track("https://youtube.com/watch?v=2", "Song 2")
+        t3 = self.playback.add_track("https://youtube.com/watch?v=3", "Song 3")
+
+        # Mark Song 1 as played
+        self.playback.db.update_track_status(t1["id"], "played")
+
+        # Reorder queued slice [t3, t2]
+        self.assertTrue(self.playback.reorder_tracks([t3["id"], t2["id"]]))
+        state = self.playback.get_state()
+        titles = [t["title"] for t in state["tracks"]]
+        self.assertEqual(titles, ["Song 1", "Song 3", "Song 2"])
+
+    def test_reorder_tracks_by_ids(self):
+        """Verify reordering tracks with a full list of track IDs."""
+        t1 = self.playback.add_track("https://youtube.com/watch?v=1", "Song 1")
+        t2 = self.playback.add_track("https://youtube.com/watch?v=2", "Song 2")
+        t3 = self.playback.add_track("https://youtube.com/watch?v=3", "Song 3")
+
+        # Reorder to [t3, t1, t2]
+        self.assertTrue(self.playback.reorder_tracks([t3["id"], t1["id"], t2["id"]]))
+        state = self.playback.get_state()
+        titles = [t["title"] for t in state["tracks"]]
+        self.assertEqual(titles, ["Song 3", "Song 1", "Song 2"])
+
+        # Invalid IDs or mismatched count returns False
+        self.assertFalse(self.playback.reorder_tracks([t3["id"], t1["id"]]))
+        self.assertFalse(self.playback.reorder_tracks([t3["id"], t1["id"], "invalid_id"]))
+
+    def test_reorder_by_indices(self):
+        """Verify reordering tracks using 0-based index list permutation."""
+        t1 = self.playback.add_track("https://youtube.com/watch?v=1", "Song 1")
+        t2 = self.playback.add_track("https://youtube.com/watch?v=2", "Song 2")
+        t3 = self.playback.add_track("https://youtube.com/watch?v=3", "Song 3")
+
+        # [2, 0, 1] -> Song 3, Song 1, Song 2
+        self.assertTrue(self.playback.reorder_by_indices([2, 0, 1]))
+        state = self.playback.get_state()
+        titles = [t["title"] for t in state["tracks"]]
+        self.assertEqual(titles, ["Song 3", "Song 1", "Song 2"])
+
+        # Invalid indices
+        self.assertFalse(self.playback.reorder_by_indices([0, 0, 1]))
+        self.assertFalse(self.playback.reorder_by_indices([0, 1]))
 
     def test_reset_history_and_clear_all(self):
         """Verify reset_history resets played tracks and clear_all empties list."""

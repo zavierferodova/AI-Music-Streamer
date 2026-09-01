@@ -229,6 +229,11 @@ def build_playback_parser() -> argparse.ArgumentParser:
             "list",
             "ls",
             "show",
+            "move",
+            "mv",
+            "reorder",
+            "play-next",
+            "next-up",
             "shuffle",
             "next",
             "skip",
@@ -621,6 +626,110 @@ def handle_playback(args: argparse.Namespace) -> int:
 
         print("═" * 60)
         return 0
+
+    elif cmd in ["play-next", "next-up"]:
+        if not targets:
+            print("Usage: playback.py play-next <N|TITLE|URL>", file=sys.stderr)
+            return 1
+        spec = " ".join(targets)
+        tracks = playback_mgr.get_state().get("tracks", [])
+        from_idx = playback_mgr.find_track_index(spec)
+        if from_idx is None:
+            print(f"Error: Track '{spec}' not found in playback list", file=sys.stderr)
+            return 1
+
+        target_track = tracks[from_idx]
+        if playback_mgr.move_to_next(from_idx):
+            print(f"✓ '{target_track['title']}' moved to play next")
+            send_ipc_command({"action": "playback_update"})
+            return 0
+        else:
+            print(f"Error: Could not move '{target_track['title']}' to play next", file=sys.stderr)
+            return 1
+
+    elif cmd in ["move", "mv"]:
+        if len(targets) < 2:
+            print("Usage: playback.py move <FROM_N|TITLE> <TO_N|top|next|bottom>", file=sys.stderr)
+            return 1
+
+        tracks = playback_mgr.get_state().get("tracks", [])
+        if not tracks:
+            print("Error: Playback list is empty", file=sys.stderr)
+            return 1
+
+        to_spec = str(targets[-1]).lower().strip()
+        from_spec = targets[0] if len(targets) == 2 else " ".join(targets[:-1])
+
+        from_idx = playback_mgr.find_track_index(from_spec)
+        if from_idx is None:
+            print(f"Error: Source track '{from_spec}' not found in playback list", file=sys.stderr)
+            return 1
+
+        target_track = tracks[from_idx]
+
+        if to_spec in ["top", "first", "start", "1"]:
+            to_idx = 0
+        elif to_spec in ["bottom", "last", "end"]:
+            to_idx = len(tracks) - 1
+        elif to_spec in ["next", "play-next", "up-next"]:
+            playing_idx = next((i for i, t in enumerate(tracks) if t.get("status") == "playing"), None)
+            if playing_idx is not None:
+                to_idx = playing_idx + 1 if from_idx > playing_idx else playing_idx
+            else:
+                to_idx = 0
+        elif to_spec in ["up", "-1"]:
+            to_idx = max(0, from_idx - 1)
+        elif to_spec in ["down", "+1"]:
+            to_idx = min(len(tracks) - 1, from_idx + 1)
+        elif to_spec.isdigit():
+            to_idx = int(to_spec) - 1
+        else:
+            to_idx = playback_mgr.find_track_index(to_spec)
+            if to_idx is None:
+                print(f"Error: Destination position or track '{to_spec}' not recognized", file=sys.stderr)
+                return 1
+
+        if not (0 <= to_idx < len(tracks)):
+            print(f"Error: Destination index #{to_idx + 1} out of bounds (1..{len(tracks)})", file=sys.stderr)
+            return 1
+
+        if playback_mgr.move_track(from_idx, to_idx):
+            print(f"✓ Moved '{target_track['title']}' to position #{to_idx + 1}")
+            send_ipc_command({"action": "playback_update"})
+            return 0
+        else:
+            print(f"Error: Invalid track move from #{from_idx + 1} to #{to_idx + 1}", file=sys.stderr)
+            return 1
+
+    elif cmd == "reorder":
+        if not targets:
+            print("Usage: playback.py reorder <N1> <N2> <N3> ... (e.g. playback.py reorder 3 1 2 4)", file=sys.stderr)
+            return 1
+
+        raw_items = []
+        for t in targets:
+            for piece in str(t).split(","):
+                p = piece.strip()
+                if p:
+                    raw_items.append(p)
+
+        if all(x.isdigit() for x in raw_items):
+            indices_0 = [int(x) - 1 for x in raw_items]
+            if playback_mgr.reorder_by_indices(indices_0):
+                print(f"✓ Reordered playback list: {', '.join(raw_items)}")
+                send_ipc_command({"action": "playback_update"})
+                return 0
+            else:
+                print(f"Error: Invalid index permutation: {raw_items}", file=sys.stderr)
+                return 1
+        else:
+            if playback_mgr.reorder_tracks(raw_items):
+                print(f"✓ Reordered playback list by IDs ({len(raw_items)} tracks)")
+                send_ipc_command({"action": "playback_update"})
+                return 0
+            else:
+                print("Error: Invalid track ID list for reordering", file=sys.stderr)
+                return 1
 
     elif cmd == "shuffle":
         mode = playback_mgr.shuffle_unplayed_tracks()

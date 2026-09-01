@@ -39,7 +39,7 @@ All audio is decoded from YouTube (or SoundCloud/Bandcamp) via `yt-dlp` → `ffm
 | `~/music-streamer/play.py` | Play a direct URL: `<URL> [VOL 0-100] [LOOP yes\|no]` — plays on HTTP stream (and speaker if in speaker mode) |
 | `~/music-streamer/play_search.py` | Search by query and play first result: `<query> [VOL] [LOOP]` — USE ONLY AFTER CONFIRMATION |
 | `~/music-streamer/search.py` | Search provider: `youtube` (default), `soundcloud`, `bandcamp`, `spotify` |
-| `~/music-streamer/playback.py` | Ephemeral Playback tracklist: `add/add-url/list/clear/shuffle/remove/next/prev/play` (deduplicated) |
+| `~/music-streamer/playback.py` | Ephemeral Playback tracklist: `add/add-url/list/move/reorder/clear/shuffle/remove/next/prev/play` (deduplicated) |
 | `~/music-streamer/prev.py` | Play previous track from playback history / loop wrap |
 | `~/music-streamer/playlist.py` | Persistent Named Playlists: `create/list/show/add/remove/delete/play/queue` (deduplicated, persistent) |
 | `~/music-streamer/pause.py` | Pause: pauses playback and streams comfort silence to clients |
@@ -55,15 +55,16 @@ All audio is decoded from YouTube (or SoundCloud/Bandcamp) via `yt-dlp` → `ffm
 ## When to use me
 
 Use this skill whenever the user asks to:
-- play / search / queue / shuffle music
+- play / search / queue / shuffle / reorder music
 - stream music to remote devices (laptop, phone, browser)
 - switch modes between speaker and silent (without restarting server)
 - pause / resume / stop / next / prev / previous / interrupt playback
+- move tracks or rearrange queue order
 - manage playlists (create, list, show, add, remove, delete, play, queue)
 - adjust volume (including mute/unmute, +N/-N) or loop setting
 - check what is playing, queue status, or streaming listeners
 
-Trigger phrases: "play music", "stream music", "search music", "queue", "shuffle", "next", "interrupt", "pause", "resume", "volume", "loop", "mode", "speaker", "silent", "stop music", "what's playing", "stream status".
+Trigger phrases: "play music", "stream music", "search music", "queue", "shuffle", "reorder", "move track", "rearrange queue", "next", "interrupt", "pause", "resume", "volume", "loop", "mode", "speaker", "silent", "stop music", "what's playing", "stream status".
 
 ---
 
@@ -176,6 +177,10 @@ If the user provides an explicit direct URL (e.g., `https://www.youtube.com/watc
 ~/music-streamer/playback.py list [--json]     # Show full tracklist (Played, Playing, Upcoming)
 ~/music-streamer/playback.py add "Alan Walker" # Search & append first result (deduplicated)
 ~/music-streamer/playback.py add-url "URL" "Title" # Append specific confirmed URL
+~/music-streamer/playback.py move 4 1          # Move 4th track to 1st position (1-indexed)
+~/music-streamer/playback.py move "FANCY" top  # Move track by name to top of queue
+~/music-streamer/playback.py play-next "FANCY" # Move track to play immediately next
+~/music-streamer/playback.py reorder 3 1 2 4   # Reorder entire queue to custom sequence
 ~/music-streamer/playback.py shuffle           # Randomize unplayed tracks (preserves played history)
 ~/music-streamer/playback.py remove 2          # Remove 2nd track from list
 ~/music-streamer/playback.py reset-history     # Reset played tracks to unplayed for fresh replay

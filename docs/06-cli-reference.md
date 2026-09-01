@@ -167,6 +167,8 @@ Manages the ephemeral playback list, queued tracks, and fair shuffle cycles.
 | `list [--json]` | Lists all tracks (Played, Now Playing, Upcoming). |
 | `add "<QUERY_OR_URL>"` | Searches and appends first result to queue (deduplicated). |
 | `add-url "<URL>" "<TITLE>"` | Appends explicit URL and Title to queue. |
+| `move <FROM_N> <TO_N>` | Moves track from 1-based index `FROM_N` to `TO_N`. |
+| `reorder <N1> <N2> ...` | Reorders active tracklist by 1-based index sequence or track IDs. |
 | `shuffle` | Shuffles upcoming unplayed tracks (preserves played history). |
 | `remove <INDEX_OR_ID>` | Removes track at specified 1-based index or ID. |
 | `play <INDEX_OR_ID>` | Immediately interrupts and jumps to track. |

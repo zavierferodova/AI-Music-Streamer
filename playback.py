@@ -5,6 +5,9 @@ Usage:
   ./playback.py add <URL|query>
   ./playback.py add-url <URL> [TITLE]
   ./playback.py list [--json]
+  ./playback.py move <FROM_N|TITLE> <TO_N|top|next|bottom>
+  ./playback.py play-next <N|TITLE|URL>
+  ./playback.py reorder <N1> <N2> ...
   ./playback.py shuffle
   ./playback.py next
   ./playback.py prev

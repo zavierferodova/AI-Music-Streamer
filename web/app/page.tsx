@@ -37,6 +37,8 @@ export default function Home() {
     interruptPlay,
     playTrackAtIndex,
     removeTrackFromPlayback,
+    movePlaybackTrack,
+    reorderPlaybackTracks,
     dismissPlaybackError,
     retryCurrentTrack,
     handleVolumeChange,
@@ -186,6 +188,8 @@ export default function Home() {
           onClearList={clearPlaybackList}
           onPlayTrack={playTrackAtIndex}
           onRemoveTrack={removeTrackFromPlayback}
+          onMoveTrack={movePlaybackTrack}
+          onReorderTracks={reorderPlaybackTracks}
           onQuickAdd={addTrackToPlayback}
           onQuickInterrupt={interruptPlay}
           onSaveToPlaylist={handleOpenSaveModal}
